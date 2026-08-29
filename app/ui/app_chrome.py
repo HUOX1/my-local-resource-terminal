@@ -18,25 +18,21 @@ class AppTitleBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 0, 0, 0)
         layout.setSpacing(8)
-
         self.title_label = QLabel("本地资源终端")
         self.title_label.setObjectName("appTitleText")
         self.title_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self.title_label)
-
-        self.version_label = QLabel("v0.4.3.1.1")
+        self.version_label = QLabel("v0.5.0.17.1")
         self.version_label.setObjectName("appTitleVersion")
         self.version_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self.version_label)
         layout.addStretch(1)
-
         self.minimize_button = self._make_button("-", "最小化")
         self.maximize_button = self._make_button("□", "最大化 / 恢复")
         self.close_button = self._make_button("×", "关闭", close=True)
         layout.addWidget(self.minimize_button)
         layout.addWidget(self.maximize_button)
         layout.addWidget(self.close_button)
-
         self.minimize_button.clicked.connect(self.host_window.showMinimized)
         self.maximize_button.clicked.connect(self.toggle_maximize)
         self.close_button.clicked.connect(self.host_window.close)

@@ -9,7 +9,6 @@ def read(rel: str) -> str:
 
 def test_pro_dark_and_light_share_the_same_full_motion_profile():
     from app.config.theme_registry import THEMES
-
     theme = read("app/ui/flat_theme.py")
     assert THEMES["flat_pro"].motion_level == "full"
     assert THEMES["flat_pro_light"].motion_level == "full"
@@ -19,13 +18,15 @@ def test_pro_dark_and_light_share_the_same_full_motion_profile():
     assert '"MOTION_LEVEL": spec.motion_level' in theme
 
 
-def test_poster_wall_uses_one_continuous_motion_timer_for_inertia_hover_and_reflow():
+def test_poster_wall_uses_one_continuous_motion_timer_for_scroll_hover_and_reflow():
     source = read("app/ui/poster_view.py")
     assert 'MOTION_TICK_MS = 16' in source
     assert 'self._motion_timer = QTimer(self)' in source
     assert 'self._motion_timer.timeout.connect(self._motion_tick)' in source
     assert 'def wheelEvent' in source
-    assert 'self._scroll_velocity' in source
+    assert 'self._scroll_target' in source
+    assert 'accumulate_scroll_target(' in source
+    assert 'smooth_scroll_value(' in source
     assert 'self._motion_timer.start()' in source
     assert 'QPropertyAnimation' not in source
     assert 'def hover_progress' in source
@@ -67,10 +68,10 @@ def test_movie_context_menus_no_longer_offer_favorite_or_watched_actions():
         assert forbidden not in batch
 
 
-def test_release_is_v0420():
-    assert 'version = "0.4.3.1.1"' in read("pyproject.toml")
-    assert 'v0.4.3.1.1' in read("app/ui/main_window.py")
-    assert 'v0.4.3.1.1' in read("app/ui/app_chrome.py")
+def test_release_is_v0509_stage1_a1():
+    assert 'version = "0.5.0.17.1"' in read("pyproject.toml")
+    assert 'v0.5.0.17' in read("app/ui/app_chrome.py")
+    assert 'v0.5.0.17.1 · Retro Performance Hotfix' in read("app/bootstrap.py")
 
 
 def test_hover_motion_timer_can_sleep_while_pointer_is_stationary():

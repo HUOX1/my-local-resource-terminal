@@ -1,0 +1,4 @@
+293a91db292534649dc983aec50373545cfc2b4bdaac9a8dd30578630d728ab7  ./PATCH_NOTES.txt
+70e0880ea90a7a6428cb89a1f875de38601d458a8ca40cdb60c490d891dee081  ./docs/development-logs/Retro_Performance_Smoke_Budget_Fix_v0.5.0.17.1.md
+1e33fb957823d53275aa081975a0a05e977df5cb263ffbeae2e5b0ea43dc4139  ./tests/test_retro_gui_smoke.py
+d882f11be5a06ae218fe051a28ceeb7699fdcd2f69b6d69fbee4b8b90c010ebe  ./tools/retro_smoke_runner.py
