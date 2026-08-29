@@ -39,8 +39,11 @@ class AppSettings:
     startup_library: Literal["movies", "games"] = "movies"
     game_sort_key: Literal["added_at", "title", "release_date", "rating", "total_play_seconds", "last_played_at", "play_count"] = "last_played_at"
     game_sort_desc: bool = True
-    movie_filter: Literal["all", "favorite", "watched", "unwatched"] = "all"
-    game_filter: Literal["all", "favorite", "installed", "uninstalled", "recent"] = "all"
+    movie_filter: str = "all"
+    game_filter: str = "all"
+    movie_folder_id: str | None = None
+    game_folder_id: str | None = None
+    movie_view_mode: Literal["poster", "list"] = "poster"
 
 
 class SettingsStore:
@@ -78,12 +81,21 @@ class SettingsStore:
         if game_sort_key not in valid_game_sort_keys:
             game_sort_key = "last_played_at"
         movie_filter = str(payload.get("movie_filter", "all"))
-        if movie_filter not in {"all", "favorite", "watched", "unwatched"}:
+        valid_movie_filters = {
+            "all", "favorite", "watched", "unwatched",
+            "available", "offline", "subtitle", "no_subtitle",
+        }
+        if movie_filter not in valid_movie_filters:
             movie_filter = "all"
         ui_theme = resolve_theme_id(str(payload.get("ui_theme", DEFAULT_THEME_ID)))
         game_filter = str(payload.get("game_filter", "all"))
         if game_filter not in {"all", "favorite", "installed", "uninstalled", "recent"}:
             game_filter = "all"
+        movie_folder_id = str(payload.get("movie_folder_id") or "").strip() or None
+        game_folder_id = str(payload.get("game_folder_id") or "").strip() or None
+        movie_view_mode = str(payload.get("movie_view_mode", "poster"))
+        if movie_view_mode not in {"poster", "list"}:
+            movie_view_mode = "poster"
         return AppSettings(
             data_dir=Path(payload["data_dir"]),
             cover_dir=Path(payload["cover_dir"]),
@@ -114,6 +126,9 @@ class SettingsStore:
             game_sort_desc=bool(payload.get("game_sort_desc", True)),
             movie_filter=movie_filter,
             game_filter=game_filter,
+            movie_folder_id=movie_folder_id,
+            game_folder_id=game_folder_id,
+            movie_view_mode=movie_view_mode,
         )
 
     def save(self, settings: AppSettings) -> None:
@@ -148,6 +163,9 @@ class SettingsStore:
             "game_sort_desc": settings.game_sort_desc,
             "movie_filter": settings.movie_filter,
             "game_filter": settings.game_filter,
+            "movie_folder_id": settings.movie_folder_id,
+            "game_folder_id": settings.game_folder_id,
+            "movie_view_mode": settings.movie_view_mode,
         }
         temporary = self.path.with_name(f"{self.path.name}.tmp")
         temporary.write_text(

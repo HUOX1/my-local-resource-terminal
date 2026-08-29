@@ -7,7 +7,6 @@ from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QStandardPaths, QTimer
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
-
 from app.config.data_dirs import (
     DataDirectoryMigrator,
     DataLayout,
@@ -35,9 +34,12 @@ from app.services.scanner import Scanner
 from app.services.screenshot_service import ScreenshotService
 from app.services.viewing_service import ViewingService
 from app.single_instance import SingleInstanceGate
+from app.ui.flat_icons import flat_icon
 from app.ui.flat_theme import apply_theme
 from app.ui.main_window import MainWindow
+from app.ui.retro_showcase import install_retro_showcase
 from app.ui.settings_dialog import SettingsDialog
+from app.ui.sound_backup_ui import enhance_settings_dialog_with_soundpacks
 from app.utils.logging import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -84,11 +86,14 @@ def default_settings() -> AppSettings:
         cover_tool_margin_px=0,
         sort_key="code",
         sort_desc=False,
-        startup_library="movies",
+        startup_library="games",
         game_sort_key="last_played_at",
         game_sort_desc=True,
         movie_filter="all",
         game_filter="all",
+        movie_folder_id=None,
+        game_folder_id=None,
+        movie_view_mode="poster",
     )
 
 
@@ -101,14 +106,12 @@ def build_services(settings: AppSettings) -> ServiceBundle:
     layout = ensure_data_layout(settings.data_dir)
     settings.cover_dir.mkdir(parents=True, exist_ok=True)
     configure_logging(layout.logs_dir)
-
     migration = MovieMetadataMigrator().migrate(layout)
     for error in migration.errors:
         logger.warning("movie metadata migration error %s: %s", error.path, error.message)
 
     database = Database(layout.database_path)
     database.initialize()
-
     metadata = MetadataService(layout.movie_metadata_dir)
     repository = MovieRepository(database)
     archived_movies, errors = metadata.load_all()
@@ -119,7 +122,6 @@ def build_services(settings: AppSettings) -> ServiceBundle:
     elif archived_movies:
         for archived_movie in archived_movies:
             repository.upsert_metadata(archived_movie)
-
     media_probe = MediaProbe(settings.ffprobe_path)
     cover_service = CoverService(settings.cover_dir, layout.cache_dir, settings.ffmpeg_path)
     catalog = CatalogService(repository, metadata, media_probe, cover_service, settings)
@@ -127,7 +129,6 @@ def build_services(settings: AppSettings) -> ServiceBundle:
     player = PlayerService()
     viewing = ViewingService(repository, metadata)
     collection_folders = CollectionFolderService(layout.collection_folders_path)
-
     game_metadata = GameMetadataService(layout.game_metadata_dir)
     game_repository = GameRepository(database)
     archived_games, game_errors = game_metadata.load_all()
@@ -138,7 +139,6 @@ def build_services(settings: AppSettings) -> ServiceBundle:
     elif archived_games:
         for archived_game in archived_games:
             game_repository.upsert_game(archived_game)
-
     game_assets = GameAssetService(layout.game_cover_dir, layout.game_preview_dir, layout.game_archive_media_dir)
     screenshot_service = ScreenshotService(layout.game_screenshot_cache_dir)
     game_catalog = GameCatalogService(
@@ -157,7 +157,6 @@ def build_services(settings: AppSettings) -> ServiceBundle:
         game_session_service.recover()
     except Exception as exc:
         logger.warning("game session recovery failed: %s", exc)
-
     return ServiceBundle(
         layout=layout,
         database=database,
@@ -187,7 +186,6 @@ def build_application(settings_path: Path | None = None) -> QApplication:
     QCoreApplication.setApplicationName("LocalMovieManager")
     app = QApplication.instance() or QApplication(sys.argv)
     apply_theme(app, "flat_pro")
-
     single_instance_gate = SingleInstanceGate("LocalMovieManager.SingleInstance.v1")
     if not single_instance_gate.acquire():
         app._local_movie_manager_secondary_instance = True  # type: ignore[attr-defined]
@@ -195,7 +193,6 @@ def build_application(settings_path: Path | None = None) -> QApplication:
         return app
     app._local_movie_manager_secondary_instance = False  # type: ignore[attr-defined]
     app._local_movie_manager_single_instance_gate = single_instance_gate  # type: ignore[attr-defined]
-
     path = Path(settings_path) if settings_path else default_settings_path()
     store = SettingsStore(path)
     if path.exists():
@@ -210,9 +207,7 @@ def build_application(settings_path: Path | None = None) -> QApplication:
         store.save(settings)
 
     apply_theme(app, settings.ui_theme)
-
     identity_service = IdentityService(path.parent / "identity")
-
     bundle = build_services(settings)
     window = MainWindow(
         bundle.catalog,
@@ -228,6 +223,23 @@ def build_application(settings_path: Path | None = None) -> QApplication:
         screenshot_service=bundle.screenshot_service,
         identity_service=identity_service,
     )
+    window.setWindowTitle("本地资源终端 · v0.5.0.17.1 · Retro Performance Hotfix")
+
+    # MainWindow historically kept these values only in memory. Restore them
+    # after construction and run one normal library configure pass so the
+    # existing controls/catalog paths remain the single source of UI behavior.
+    window._current_folder_ids = {
+        "movies": settings.movie_folder_id,
+        "games": settings.game_folder_id,
+    }
+    window._movie_view_index = 1 if settings.movie_view_mode == "list" else 0
+    if window._movie_view_index == 1:
+        window.view_button.setText("封面墙")
+        window.view_button.setIcon(flat_icon("grid"))
+    else:
+        window.view_button.setText("列表视图")
+        window.view_button.setIcon(flat_icon("list"))
+    window.switch_library("games", clear_search=False)
 
     state = {"settings": settings, "bundle": bundle}
 
@@ -242,6 +254,8 @@ def build_application(settings_path: Path | None = None) -> QApplication:
     single_instance_gate.set_activation_handler(activate_existing_window)
 
     def save_runtime_settings(updated: AppSettings, *, warning_name: str) -> bool:
+        if updated == state["settings"]:
+            return True
         try:
             store.save(updated)
         except OSError as exc:
@@ -258,9 +272,21 @@ def build_application(settings_path: Path | None = None) -> QApplication:
             return
         current = state["settings"]
         dialog = SettingsDialog(current, window, settings_path=path)
+        enhance_settings_dialog_with_soundpacks(dialog)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        updated = dialog.result_settings
+        # SettingsDialog intentionally edits user-facing settings only. Preserve
+        # runtime library state so opening Settings never resets folder/view state.
+        updated = replace(
+            dialog.result_settings,
+            movie_filter=current.movie_filter,
+            game_filter=current.game_filter,
+            movie_folder_id=current.movie_folder_id,
+            game_folder_id=current.game_folder_id,
+            movie_view_mode=current.movie_view_mode,
+            sidebar_visible=current.sidebar_visible,
+            sidebar_width=current.sidebar_width,
+        )
         if updated.data_dir != current.data_dir:
             try:
                 DataDirectoryMigrator().migrate(current_bundle.layout, updated.data_dir)
@@ -300,6 +326,10 @@ def build_application(settings_path: Path | None = None) -> QApplication:
         window.game_session_service = new_bundle.game_session_service
         window.screenshot_service = new_bundle.screenshot_service
         window.apply_settings(updated)
+        retro = getattr(window, "_retro_showcase_overlay", None)
+        if retro is not None:
+            retro.refresh_sound_environment()
+            retro.refresh_records()
         window.statusBar().showMessage("设置已应用", 5000)
 
     def persist_cover_tool_state(source_dir: str, margin_px: int) -> None:
@@ -312,13 +342,29 @@ def build_application(settings_path: Path | None = None) -> QApplication:
         )
         save_runtime_settings(updated, warning_name="cover tool state")
 
+    def stable_filter_key(domain: str, fallback: str) -> str:
+        if window.current_library != domain:
+            return fallback
+        data = window._current_filter_data()
+        key = str(data.get("key") or "all")
+        if domain == "movies":
+            allowed = {
+                "all", "favorite", "watched", "unwatched",
+                "available", "offline", "subtitle", "no_subtitle",
+            }
+        else:
+            allowed = {"all", "favorite", "installed", "uninstalled", "recent"}
+        # Library/tag choices have dynamic payloads; keep them session-only until
+        # their identity is encoded explicitly rather than restoring the wrong item.
+        return key if key in allowed else "all"
+
     def persist_movie_view_state(sort_key: str, sort_desc: bool, filter_key: str) -> None:
         current = state["settings"]
         updated = replace(
             current,
             sort_key=sort_key,
             sort_desc=bool(sort_desc),
-            movie_filter=filter_key,
+            movie_filter=stable_filter_key("movies", filter_key),
         )
         save_runtime_settings(updated, warning_name="movie view state")
 
@@ -328,21 +374,81 @@ def build_application(settings_path: Path | None = None) -> QApplication:
             current,
             game_sort_key=sort_key,
             game_sort_desc=bool(sort_desc),
-            game_filter=filter_key,
+            game_filter=stable_filter_key("games", filter_key),
         )
         save_runtime_settings(updated, warning_name="game view state")
+
+    def persist_current_folder(_index: int) -> None:
+        current = state["settings"]
+        folder_id = window._current_folder_ids.get(window.current_library)
+        if window.current_library == "games":
+            updated = replace(current, game_folder_id=folder_id)
+        else:
+            updated = replace(current, movie_folder_id=folder_id)
+        save_runtime_settings(updated, warning_name=f"{window.current_library} folder state")
+
+    def persist_movie_view_mode(_checked: bool = False) -> None:
+        current = state["settings"]
+        mode = "list" if int(window._movie_view_index) == 1 else "poster"
+        updated = replace(current, movie_view_mode=mode)
+        save_runtime_settings(updated, warning_name="movie view mode")
+
+    def persist_sidebar_state(expanded: bool) -> None:
+        current = state["settings"]
+        width = 196 if expanded else 72
+        updated = replace(current, sidebar_visible=bool(expanded), sidebar_width=width)
+        save_runtime_settings(updated, warning_name="sidebar state")
+
+    def persist_retro_view_state(domain: str, sort_key: str, sort_desc: bool, filter_key: str) -> None:
+        current = state["settings"]
+        if domain == "games":
+            updated = replace(
+                current,
+                game_sort_key=sort_key,
+                game_sort_desc=bool(sort_desc),
+                game_filter=filter_key,
+            )
+        else:
+            updated = replace(
+                current,
+                sort_key=sort_key,
+                sort_desc=bool(sort_desc),
+                movie_filter=filter_key,
+            )
+        save_runtime_settings(updated, warning_name=f"retro {domain} view state")
+
+    def persist_retro_folder_state(domain: str, folder_id) -> None:
+        current = state["settings"]
+        normalized = str(folder_id).strip() if folder_id else None
+        if domain == "games":
+            updated = replace(current, game_folder_id=normalized)
+        else:
+            updated = replace(current, movie_folder_id=normalized)
+        save_runtime_settings(updated, warning_name=f"retro {domain} folder state")
 
     window.settings_requested.connect(open_settings)
     window.cover_tool_state_changed.connect(persist_cover_tool_state)
     window.movie_view_state_changed.connect(persist_movie_view_state)
     window.game_view_state_changed.connect(persist_game_view_state)
-    def start_scan_after_identity() -> None:
-        settings = state["settings"]
-        if settings.auto_scan and settings.libraries:
-            QTimer.singleShot(250, window.start_scan)
+    window.folder_combo.currentIndexChanged.connect(persist_current_folder)
+    window.view_button.clicked.connect(persist_movie_view_mode)
+    window.main_splitter.sidebar_state_changed.connect(persist_sidebar_state)
 
-    window.identity_entered.connect(start_scan_after_identity)
+    # Retro is now the primary presentation. Identity/Flat Pro implementation
+    # code remains in the repository for historical compatibility, but normal
+    # users no longer receive a Retro -> Flat fallback path.
+    retro = install_retro_showcase(window)
+    retro.view_state_changed.connect(persist_retro_view_state)
+    retro.folder_state_changed.connect(persist_retro_folder_state)
+    window.title_bar.setVisible(False)
+    retro._fit_parent()
+
+    settings = state["settings"]
+    if settings.auto_scan and settings.libraries:
+        QTimer.singleShot(250, window.start_scan)
+
     window.show()
+    QTimer.singleShot(0, retro.raise_)
 
     # Retain the old attribute names so any local launch integrations remain stable.
     app._local_movie_manager_window = window  # type: ignore[attr-defined]

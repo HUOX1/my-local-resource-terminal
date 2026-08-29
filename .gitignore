@@ -36,3 +36,6 @@ dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local GUI smoke-test artifacts
+artifacts/retro-smoke-local/

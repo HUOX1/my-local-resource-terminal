@@ -15,6 +15,7 @@ class MovieListModel(QAbstractListModel):
     FavoriteRole = MovieUuidRole + 4
     WatchedRole = MovieUuidRole + 5
     TitleRole = MovieUuidRole + 6
+    EpisodeCountRole = MovieUuidRole + 7
 
     def __init__(self, movies: Sequence[MovieRecord] = (), parent=None) -> None:
         super().__init__(parent)
@@ -36,6 +37,7 @@ class MovieListModel(QAbstractListModel):
             self.FavoriteRole: record.metadata.favorite,
             self.WatchedRole: record.metadata.watched,
             self.TitleRole: record.metadata.title,
+            self.EpisodeCountRole: len(record.episodes),
         }
         return values.get(role)
 
@@ -49,6 +51,7 @@ class MovieListModel(QAbstractListModel):
             self.FavoriteRole: b"favorite",
             self.WatchedRole: b"watched",
             self.TitleRole: b"title",
+            self.EpisodeCountRole: b"episodeCount",
         })
         return roles
 

@@ -7,14 +7,16 @@ from PySide6.QtWidgets import QListView
 
 from app.ui.flat_theme import FlatTokens
 from app.ui.poster_layout import poster_wall_targets
+from app.ui.poster_scroll import accumulate_scroll_target, smooth_scroll_value
 
 
 class PosterWallListView(QListView):
     """Poster wall with restrained Flat Pro motion.
 
-    The view keeps layout/caching responsibilities unchanged: poster delegates
-    still own image decoding caches and size hints.  Motion only affects paint
-    offsets, hover scale and wheel position.
+    Layout/caching responsibilities stay with the delegates.  The view only
+    coordinates poster placement, hover progress, responsive reflow and wheel
+    position. Traditional mouse wheels use a target position while precision
+    touchpads keep Qt's native pixel scrolling.
     """
 
     MODEL_LAYOUT_INTERVAL_MS = 16
@@ -24,10 +26,7 @@ class PosterWallListView(QListView):
     LAYOUT_ALIGNMENT = "fixed_left"
     MINIMUM_SPACING = 10
     HOVER_DURATION_MS = 110
-    SCROLL_IMPULSE_PX_PER_S = 360.0
-    SCROLL_MAX_SPEED_PX_PER_S = 900.0
-    SCROLL_DECAY_PER_TICK = 0.80
-    SCROLL_STOP_SPEED_PX_PER_S = 10.0
+    SCROLL_STOP_DISTANCE_PX = 0.45
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -36,14 +35,12 @@ class PosterWallListView(QListView):
         self._model_layout_timer.setSingleShot(True)
         self._model_layout_timer.setInterval(self.MODEL_LAYOUT_INTERVAL_MS)
         self._model_layout_timer.timeout.connect(self._apply_poster_layout)
-
         self._motion_timer = QTimer(self)
         self._motion_timer.setInterval(self.MOTION_TICK_MS)
         self._motion_timer.timeout.connect(self._motion_tick)
         self._last_motion_time = 0.0
-
-        self._scroll_velocity = 0.0
         self._scroll_position = 0.0
+        self._scroll_target = 0.0
         self._hover_row = -1
         self._hover_values: dict[int, float] = {}
         self._reflow_offsets: dict[int, QPointF] = {}
@@ -51,7 +48,6 @@ class PosterWallListView(QListView):
         self._minimum_spacing = self.MINIMUM_SPACING
         self._layout_columns: int | None = None
         self._item_height_cache: tuple[int, ...] | None = None
-
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setMouseTracking(True)
@@ -87,7 +83,6 @@ class PosterWallListView(QListView):
         cached = self._item_height_cache
         if cached is not None and len(cached) == row_count:
             return cached
-
         heights: list[int] = []
         for row in range(row_count):
             index = model.index(row, 0)
@@ -120,7 +115,7 @@ class PosterWallListView(QListView):
 
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
-        # Native Windows resizing must never outrun the poster wall.  Apply the
+        # Native Windows resizing must never outrun the poster wall. Apply the
         # deterministic target geometry in the same resize event and suppress
         # reflow animation while the user is dragging the window edge.
         self._apply_poster_layout(animate=False)
@@ -145,11 +140,12 @@ class PosterWallListView(QListView):
             return
 
         # Precision touchpads already provide smooth pixel deltas through Qt;
-        # do not layer synthetic inertia on top of the OS gesture.
-        pixel_delta = event.pixelDelta().y()
-        if pixel_delta:
-            self._scroll_velocity = 0.0
+        # do not layer synthetic smoothing on top of the OS gesture.
+        if event.pixelDelta().y():
             super().wheelEvent(event)
+            bar = self.verticalScrollBar()
+            self._scroll_position = float(bar.value())
+            self._scroll_target = self._scroll_position
             return
 
         angle_delta = event.angleDelta().y()
@@ -157,14 +153,17 @@ class PosterWallListView(QListView):
             super().wheelEvent(event)
             return
 
-        steps = angle_delta / 120.0
         bar = self.verticalScrollBar()
-        if abs(self._scroll_velocity) < self.SCROLL_STOP_SPEED_PX_PER_S:
+        if abs(self._scroll_target - self._scroll_position) <= self.SCROLL_STOP_DISTANCE_PX:
             self._scroll_position = float(bar.value())
-        self._scroll_velocity -= steps * self.SCROLL_IMPULSE_PX_PER_S
-        self._scroll_velocity = max(
-            -self.SCROLL_MAX_SPEED_PX_PER_S,
-            min(self.SCROLL_MAX_SPEED_PX_PER_S, self._scroll_velocity),
+            self._scroll_target = self._scroll_position
+
+        self._scroll_target = accumulate_scroll_target(
+            self._scroll_position,
+            self._scroll_target,
+            angle_delta,
+            float(bar.minimum()),
+            float(bar.maximum()),
         )
         self._ensure_motion_timer()
         event.accept()
@@ -214,7 +213,6 @@ class PosterWallListView(QListView):
         if not animate:
             self._reflow_offsets.clear()
             self._reflow_progress = 1.0
-
         layout = poster_wall_targets(
             self.viewport().width(),
             item_heights,
@@ -224,7 +222,6 @@ class PosterWallListView(QListView):
             hysteresis=self.LAYOUT_HYSTERESIS_PX,
             alignment=self.LAYOUT_ALIGNMENT,
         )
-
         old_rects = (
             self._capture_visible_rects(include_motion=True)
             if animate and self._motion_enabled()
@@ -237,7 +234,6 @@ class PosterWallListView(QListView):
                 if rect.left() != target.x or rect.top() != target.y:
                     changed = True
                     break
-
         self._layout_columns = layout.columns
         for row, target in enumerate(layout.targets):
             self.setPositionForIndex(QPoint(target.x, target.y), model.index(row, 0))
@@ -279,25 +275,23 @@ class PosterWallListView(QListView):
         dt = max(0.001, min(0.050, dt))
         needs_update = False
 
-        # Short wheel tail.  New wheel input adds velocity to this same timer;
-        # there is no animation stop/restart cycle.
-        if abs(self._scroll_velocity) >= self.SCROLL_STOP_SPEED_PX_PER_S:
+        # Traditional wheel input extends one shared destination. The timer
+        # continuously eases toward it, so rapid wheel notches feel continuous
+        # instead of repeatedly starting short velocity tails.
+        scroll_animating = abs(self._scroll_target - self._scroll_position) > self.SCROLL_STOP_DISTANCE_PX
+        if scroll_animating:
             bar = self.verticalScrollBar()
             minimum = float(bar.minimum())
             maximum = float(bar.maximum())
-            self._scroll_position += self._scroll_velocity * dt
-            clamped = max(minimum, min(maximum, self._scroll_position))
-            if clamped != self._scroll_position:
-                self._scroll_velocity = 0.0
-            self._scroll_position = clamped
+            self._scroll_target = max(minimum, min(maximum, self._scroll_target))
+            self._scroll_position = smooth_scroll_value(self._scroll_position, self._scroll_target, dt)
+            if abs(self._scroll_target - self._scroll_position) <= self.SCROLL_STOP_DISTANCE_PX:
+                self._scroll_position = self._scroll_target
+                scroll_animating = False
             bar.setValue(round(self._scroll_position))
-            decay = self.SCROLL_DECAY_PER_TICK ** (dt / (self.MOTION_TICK_MS / 1000.0))
-            self._scroll_velocity *= decay
             needs_update = True
-        else:
-            self._scroll_velocity = 0.0
 
-        # Hover progress is independent from layout.  Both the incoming and the
+        # Hover progress is independent from layout. Both the incoming and the
         # outgoing card ease over the same short duration.
         hover_step = dt / (self.HOVER_DURATION_MS / 1000.0)
         hover_animating = False
@@ -331,10 +325,5 @@ class PosterWallListView(QListView):
 
         if needs_update:
             self.viewport().update()
-
-        if (
-            self._scroll_velocity == 0.0
-            and not hover_animating
-            and self._reflow_progress >= 1.0
-        ):
+        if not scroll_animating and not hover_animating and self._reflow_progress >= 1.0:
             self._motion_timer.stop()
