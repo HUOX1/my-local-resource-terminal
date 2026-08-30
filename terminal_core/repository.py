@@ -136,17 +136,34 @@ class LibraryRepository:
             )
         return asset
 
-    def best_media_asset(self, owner_id: str, kind: str) -> MediaAsset | None:
+    def list_media_assets(self, owner_id: str, kind: str | None = None) -> list[MediaAsset]:
         with self.database.connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, owner_id, kind, path, cache_path, priority, source
-                FROM media_assets
-                WHERE owner_id = ? AND kind = ?
-                """,
-                (owner_id, kind),
-            ).fetchall()
+            if kind is None:
+                rows = conn.execute(
+                    """
+                    SELECT id, owner_id, kind, path, cache_path, priority, source
+                    FROM media_assets
+                    WHERE owner_id = ?
+                    """,
+                    (owner_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT id, owner_id, kind, path, cache_path, priority, source
+                    FROM media_assets
+                    WHERE owner_id = ? AND kind = ?
+                    """,
+                    (owner_id, kind),
+                ).fetchall()
         assets = [self._asset_from_row(row) for row in rows]
+        return sorted(
+            assets,
+            key=lambda item: (item.kind, _SOURCE_RANK[item.source], item.priority, item.id),
+        )
+
+    def best_media_asset(self, owner_id: str, kind: str) -> MediaAsset | None:
+        assets = self.list_media_assets(owner_id, kind)
         if not assets:
             return None
         return min(assets, key=lambda item: (_SOURCE_RANK[item.source], item.priority, item.id))
