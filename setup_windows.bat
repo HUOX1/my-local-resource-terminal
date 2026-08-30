@@ -17,7 +17,7 @@ if errorlevel 1 goto :error
 ".venv\Scripts\python.exe" -m pip install -e .
 if errorlevel 1 goto :error
 echo.
-echo Installation complete. Run run_windows.bat to start the app.
+echo Installation complete. Double-click run_windows.vbs to start v0.6.
 pause
 exit /b 0
 :error
