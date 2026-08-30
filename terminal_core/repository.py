@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 import uuid
 
@@ -91,7 +92,28 @@ class LibraryRepository:
             )
             if cursor.rowcount != 1:
                 raise KeyError(item_id)
-            conn.execute("UPDATE library_items SET updated_at = ? WHERE id = ?", (now_iso, item_id))
+            conn.execute(
+                "UPDATE library_items SET updated_at = ? WHERE id = ?",
+                (now_iso, item_id),
+            )
+
+    def get_state(self) -> dict[str, object]:
+        with self.database.connect() as conn:
+            rows = conn.execute(
+                "SELECT key, value_json FROM terminal_state ORDER BY key"
+            ).fetchall()
+        return {str(row["key"]): json.loads(str(row["value_json"])) for row in rows}
+
+    def update_state(self, values: dict[str, object]) -> None:
+        with self.database.connect() as conn:
+            for key, value in values.items():
+                conn.execute(
+                    """
+                    INSERT INTO terminal_state (key, value_json) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
+                    """,
+                    (str(key), json.dumps(value, ensure_ascii=False)),
+                )
 
     def add_media_asset(
         self,
@@ -142,8 +164,7 @@ class LibraryRepository:
                 rows = conn.execute(
                     """
                     SELECT id, owner_id, kind, path, cache_path, priority, source
-                    FROM media_assets
-                    WHERE owner_id = ?
+                    FROM media_assets WHERE owner_id = ?
                     """,
                     (owner_id,),
                 ).fetchall()
@@ -151,8 +172,7 @@ class LibraryRepository:
                 rows = conn.execute(
                     """
                     SELECT id, owner_id, kind, path, cache_path, priority, source
-                    FROM media_assets
-                    WHERE owner_id = ? AND kind = ?
+                    FROM media_assets WHERE owner_id = ? AND kind = ?
                     """,
                     (owner_id, kind),
                 ).fetchall()
@@ -166,11 +186,18 @@ class LibraryRepository:
         assets = self.list_media_assets(owner_id, kind)
         if not assets:
             return None
-        return min(assets, key=lambda item: (_SOURCE_RANK[item.source], item.priority, item.id))
+        return min(
+            assets,
+            key=lambda item: (_SOURCE_RANK[item.source], item.priority, item.id),
+        )
 
     @staticmethod
     def _game_from_row(row) -> GameRecord:
-        last_played = datetime.fromisoformat(str(row["last_played_at"])) if row["last_played_at"] else None
+        last_played = (
+            datetime.fromisoformat(str(row["last_played_at"]))
+            if row["last_played_at"]
+            else None
+        )
         return GameRecord(
             id=str(row["id"]),
             title=str(row["title"]),
