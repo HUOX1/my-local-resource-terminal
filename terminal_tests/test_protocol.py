@@ -1,0 +1,71 @@
+import json
+
+import pytest
+from websockets.asyncio.client import connect
+
+from terminal_core.protocol import ProtocolError, parse_request, response_message
+from terminal_core.websocket_server import HOST, PORT, TerminalWebSocketServer
+
+
+def test_parse_request_rejects_missing_id():
+    with pytest.raises(ProtocolError):
+        parse_request({"type": "hello", "payload": {"protocol": 1}})
+
+
+def test_parse_request_rejects_missing_type():
+    with pytest.raises(ProtocolError):
+        parse_request({"id": "1", "payload": {}})
+
+
+def test_parse_request_requires_object_payload():
+    with pytest.raises(ProtocolError):
+        parse_request({"id": "1", "type": "hello", "payload": []})
+
+
+def test_response_message_preserves_request_id():
+    value = response_message("abc", data={"ok": True})
+    assert value == {
+        "id": "abc",
+        "type": "response",
+        "ok": True,
+        "data": {"ok": True},
+        "error": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_server_requires_hello_before_other_commands():
+    async def handler(command_type, payload):
+        return []
+
+    server = TerminalWebSocketServer(handler)
+    await server.start()
+    try:
+        async with connect(f"ws://{HOST}:{PORT}") as ws:
+            await ws.send(json.dumps({"id":"1","type":"library.games.list","payload":{}}))
+            msg = json.loads(await ws.recv())
+            assert msg["ok"] is False
+            assert msg["error"]["code"] == "handshake_required"
+    finally:
+        await server.close()
+
+
+@pytest.mark.asyncio
+async def test_server_accepts_protocol_1_hello_then_command():
+    async def handler(command_type, payload):
+        assert command_type == "library.games.list"
+        return []
+
+    server = TerminalWebSocketServer(handler)
+    await server.start()
+    try:
+        async with connect(f"ws://{HOST}:{PORT}") as ws:
+            await ws.send(json.dumps({"id":"h","type":"hello","payload":{"protocol":1}}))
+            hello = json.loads(await ws.recv())
+            assert hello["ok"] is True
+            await ws.send(json.dumps({"id":"2","type":"library.games.list","payload":{}}))
+            msg = json.loads(await ws.recv())
+            assert msg["ok"] is True
+            assert msg["data"] == []
+    finally:
+        await server.close()
