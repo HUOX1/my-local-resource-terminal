@@ -7,16 +7,23 @@ name = "local-resource-terminal"
 version = "0.6.0"
 requires-python = ">=3.11"
 dependencies = [
-    "PySide6>=6,<7",
     "Pillow>=10,<13",
     "websockets>=15,<16",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "pytest-qt>=4,<5"]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "terminal_tests"]
+testpaths = ["terminal_tests"]
 
 [project.scripts]
 local-resource-terminal = "terminal_launcher.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["terminal_core*", "terminal_launcher*"]
+exclude = ["terminal_tests*", "terminal_tools*", "godot_frontend*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+terminal_core = ["schema.sql"]
