@@ -9,10 +9,10 @@ const AUDIO_LOADER: Script = preload("res://scripts/audio_file_loader.gd")
 const XMB_SECTIONS: Array[String] = ["GAMES", "MOVIES", "COMICS", "MUSIC", "SEARCH", "SYSTEM"]
 const PREVIEW_SETTLE_SECONDS: float = 0.40
 
-var backend: TerminalBackendClient
+var backend
 var camera: Camera3D
-var carousel: GameCarousel3D
-var preview: PreviewPanel
+var carousel
+var preview
 var xmb_buttons: Array[Button] = []
 var section_index: int = 0
 var backend_label: Label
@@ -67,22 +67,26 @@ func _build_3d_world() -> void:
     var world: Node3D = Node3D.new()
     world.name = "CollectionWorld"
     add_child(world)
+
     camera = Camera3D.new()
     camera.position = Vector3(0.0, 0.0, 7.2)
     camera.current = true
     world.add_child(camera)
+
     var light: DirectionalLight3D = DirectionalLight3D.new()
     light.rotation_degrees = Vector3(-15.0, -25.0, 0.0)
     light.light_energy = 1.15
     light.light_color = Color(0.82, 0.86, 1.0)
     world.add_child(light)
+
     var fill: OmniLight3D = OmniLight3D.new()
     fill.position = Vector3(-2.5, 1.0, 3.0)
     fill.omni_range = 8.0
     fill.light_energy = 1.3
     fill.light_color = Color(0.45, 0.18, 0.95)
     world.add_child(fill)
-    carousel = CAROUSEL_SCRIPT.new() as GameCarousel3D
+
+    carousel = CAROUSEL_SCRIPT.new()
     world.add_child(carousel)
     carousel.configure(camera)
     carousel.selection_changed.connect(_on_selection_changed)
@@ -93,9 +97,11 @@ func _build_ui() -> void:
     var layer: CanvasLayer = CanvasLayer.new()
     layer.layer = 10
     add_child(layer)
+
     var ui: Control = Control.new()
     ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     layer.add_child(ui)
+
     var x: float = 62.0
     for i: int in range(XMB_SECTIONS.size()):
         var button: Button = Button.new()
@@ -109,11 +115,13 @@ func _build_ui() -> void:
         ui.add_child(button)
         xmb_buttons.append(button)
         x += 148.0
+
     title_label = Label.new()
     title_label.position = Vector2(78.0, 118.0)
     title_label.size = Vector2(720.0, 52.0)
     title_label.add_theme_font_size_override("font_size", 34)
     ui.add_child(title_label)
+
     backend_label = Label.new()
     backend_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
     backend_label.position = Vector2(-340.0, 60.0)
@@ -122,6 +130,7 @@ func _build_ui() -> void:
     backend_label.text = "BACKEND CONNECTING"
     backend_label.add_theme_font_size_override("font_size", 12)
     ui.add_child(backend_label)
+
     fps_label = Label.new()
     fps_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
     fps_label.position = Vector2(-110.0, 60.0)
@@ -129,6 +138,7 @@ func _build_ui() -> void:
     fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     fps_label.add_theme_font_size_override("font_size", 12)
     ui.add_child(fps_label)
+
     hint_label = Label.new()
     hint_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
     hint_label.position = Vector2(78.0, -72.0)
@@ -137,14 +147,17 @@ func _build_ui() -> void:
     hint_label.add_theme_font_size_override("font_size", 12)
     hint_label.add_theme_color_override("font_color", Color(0.56, 0.57, 0.70))
     ui.add_child(hint_label)
-    preview = PREVIEW_SCRIPT.new() as PreviewPanel
+
+    preview = PREVIEW_SCRIPT.new()
     preview.position = Vector2(970.0, 210.0)
     preview.size = Vector2(540.0, 500.0)
     preview.visible = false
     preview.media_audio_activity_changed.connect(_on_preview_audio_activity_changed)
     ui.add_child(preview)
+
     theme_music_player = AudioStreamPlayer.new()
     add_child(theme_music_player)
+
     placeholder_label = Label.new()
     placeholder_label.position = Vector2(78.0, 240.0)
     placeholder_label.size = Vector2(980.0, 100.0)
@@ -152,27 +165,32 @@ func _build_ui() -> void:
     placeholder_label.add_theme_color_override("font_color", Color(0.58, 0.59, 0.70))
     placeholder_label.visible = false
     ui.add_child(placeholder_label)
+
     system_panel = VBoxContainer.new()
     system_panel.position = Vector2(78.0, 220.0)
     system_panel.size = Vector2(460.0, 300.0)
     system_panel.add_theme_constant_override("separation", 14)
     system_panel.visible = false
     ui.add_child(system_panel)
+
     var add_game_button: Button = Button.new()
     add_game_button.text = "ADD GAME…"
     add_game_button.custom_minimum_size = Vector2(320.0, 46.0)
     add_game_button.pressed.connect(_open_add_game_dialog)
     system_panel.add_child(add_game_button)
+
     var window_button: Button = Button.new()
     window_button.text = "TOGGLE WINDOW / MAXIMIZED"
     window_button.custom_minimum_size = Vector2(320.0, 46.0)
     window_button.pressed.connect(_toggle_window_mode)
     system_panel.add_child(window_button)
+
     var system_note: Label = Label.new()
     system_note.text = "Phase 1 System shell\nData: LocalResourceTerminal / v0.6\nBackend: 127.0.0.1 only"
     system_note.add_theme_font_size_override("font_size", 13)
     system_note.add_theme_color_override("font_color", Color(0.56, 0.57, 0.70))
     system_panel.add_child(system_note)
+
     add_game_dialog = FileDialog.new()
     add_game_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
     add_game_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -182,7 +200,7 @@ func _build_ui() -> void:
     ui.add_child(add_game_dialog)
 
 func _build_backend() -> void:
-    backend = BACKEND_CLIENT_SCRIPT.new() as TerminalBackendClient
+    backend = BACKEND_CLIENT_SCRIPT.new()
     add_child(backend)
     backend.connected.connect(_on_backend_connected)
     backend.disconnected.connect(_on_backend_disconnected)
@@ -216,8 +234,12 @@ func _set_section(index: int, persist: bool = true) -> void:
     for i: int in range(xmb_buttons.size()):
         var active: bool = i == section_index
         var button: Button = xmb_buttons[i]
-        button.add_theme_color_override("font_color", Color(0.96, 0.95, 1.0) if active else Color(0.48, 0.49, 0.61))
+        button.add_theme_color_override(
+            "font_color",
+            Color(0.96, 0.95, 1.0) if active else Color(0.48, 0.49, 0.61)
+        )
         button.add_theme_font_size_override("font_size", 22 if active else 16)
+
     var section: String = XMB_SECTIONS[section_index]
     title_label.text = section
     carousel.visible = section == "GAMES"
@@ -229,8 +251,9 @@ func _set_section(index: int, persist: bool = true) -> void:
         _close_preview()
     else:
         title_label.text = String(_selected_game.get("title", "GAMES"))
+
     if persist and backend != null and backend.is_connected_to_backend():
-        backend.request("state.update", {"last_section": section.casefold()})
+        backend.request("state.update", {"last_section": section.to_lower()})
 
 func _on_backend_connected() -> void:
     backend_label.text = "BACKEND CONNECTED"
@@ -255,6 +278,7 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
             if index >= 0:
                 _set_section(index, false)
         return
+
     if request_id == _pending_games_id:
         _pending_games_id = ""
         if ok and data is Array:
@@ -266,12 +290,14 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
             if not _restore_item_id.is_empty():
                 _restore_selection_by_id(_restore_item_id)
         return
+
     if request_id == _pending_theme_id:
         _pending_theme_id = ""
         if ok and data is Dictionary:
             _current_theme = data as Dictionary
             _apply_theme(_current_theme)
         return
+
     if request_id == _pending_settings_id:
         _pending_settings_id = ""
         if ok and data is Dictionary:
@@ -284,6 +310,7 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
             if not _current_theme.is_empty():
                 _apply_theme_audio(_current_theme)
         return
+
     if request_id == _pending_preview_id:
         _pending_preview_id = ""
         if ok and data is Dictionary:
@@ -291,12 +318,14 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
         else:
             preview.show_game(_selected_game, {})
         return
+
     if request_id == _pending_launch_id:
         _pending_launch_id = ""
         if not ok:
             backend_label.text = "LAUNCH FAILED"
             backend_label.tooltip_text = String(error)
         return
+
     if request_id == _pending_create_id:
         _pending_create_id = ""
         if not ok:
@@ -379,8 +408,14 @@ func _apply_theme(theme: Dictionary) -> void:
     var ambient_value: Variant = theme.get("ambient", {})
     if ambient_value is Dictionary:
         var ambient: Dictionary = ambient_value as Dictionary
-        _ambient_material.set_shader_parameter("wave_amount", clampf(float(ambient.get("wave_strength", 0.82)), 0.0, 1.0))
-        _ambient_material.set_shader_parameter("symbol_amount", clampf(float(ambient.get("symbol_opacity", 0.24)) * 1.75, 0.0, 1.0))
+        _ambient_material.set_shader_parameter(
+            "wave_amount",
+            clampf(float(ambient.get("wave_strength", 0.82)), 0.0, 1.0)
+        )
+        _ambient_material.set_shader_parameter(
+            "symbol_amount",
+            clampf(float(ambient.get("symbol_opacity", 0.24)) * 1.75, 0.0, 1.0)
+        )
     _apply_theme_audio(theme)
 
 func _apply_theme_audio(theme: Dictionary) -> void:
@@ -416,7 +451,14 @@ func _on_game_executable_selected(path: String) -> void:
         backend_label.text = "BACKEND OFFLINE"
         return
     var file_name: String = path.get_file().get_basename()
-    _pending_create_id = backend.request("game.create", {"title": file_name, "executable_path": path, "working_directory": path.get_base_dir()})
+    _pending_create_id = backend.request(
+        "game.create",
+        {
+            "title": file_name,
+            "executable_path": path,
+            "working_directory": path.get_base_dir(),
+        }
+    )
 
 func _toggle_window_mode() -> void:
     if get_window().mode == Window.MODE_MAXIMIZED:
