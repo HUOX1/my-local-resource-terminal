@@ -90,9 +90,9 @@ func _handle_text(text: String) -> void:
     if not (parsed is Dictionary):
         return
     var message: Dictionary = parsed as Dictionary
-    if String(message.get("type", "")) == "response":
-        var request_id: String = String(message.get("id", ""))
-        var pending_type: String = String(_pending_types.get(request_id, ""))
+    if str(message.get("type", "")) == "response":
+        var request_id: String = str(message.get("id", ""))
+        var pending_type: String = str(_pending_types.get(request_id, ""))
         _pending_types.erase(request_id)
         var ok: bool = bool(message.get("ok", false))
         if pending_type == "hello" and ok:
@@ -104,7 +104,7 @@ func _handle_text(text: String) -> void:
             message.get("error", null)
         )
         return
-    var event_type: String = String(message.get("type", ""))
+    var event_type: String = str(message.get("type", ""))
     var payload_value: Variant = message.get("payload", {})
     if not event_type.is_empty() and payload_value is Dictionary:
         event_received.emit(event_type, payload_value as Dictionary)
