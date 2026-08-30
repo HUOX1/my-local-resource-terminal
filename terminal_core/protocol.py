@@ -33,20 +33,9 @@ def parse_request(value: object) -> Request:
     return Request(id=request_id, type=request_type, payload=payload)
 
 
-def response_message(
-    request_id: str,
-    *,
-    data: object | None = None,
-    error: object | None = None,
-) -> dict[str, object]:
+def response_message(request_id: str, *, data: object | None = None, error: object | None = None) -> dict[str, object]:
     ok = error is None
-    return {
-        "id": request_id,
-        "type": "response",
-        "ok": ok,
-        "data": data if ok else None,
-        "error": None if ok else error,
-    }
+    return {"id": request_id, "type": "response", "ok": ok, "data": data if ok else None, "error": None if ok else error}
 
 
 def event_message(event_type: str, payload: dict[str, object]) -> dict[str, object]:

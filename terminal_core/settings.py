@@ -50,10 +50,7 @@ class TerminalSettings:
         self._validate()
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(f".{path.name}.tmp")
-        temporary.write_text(
-            json.dumps(self.to_dict(), ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        temporary.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         json.loads(temporary.read_text(encoding="utf-8"))
         temporary.replace(path)
 

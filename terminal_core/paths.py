@@ -21,15 +21,7 @@ class TerminalPaths:
         if not local_app_data:
             local_app_data = str(Path.home() / "AppData" / "Local")
         root = Path(local_app_data) / "LocalResourceTerminal" / "v0.6"
-        return cls(
-            root=root,
-            database=root / "library.db",
-            assets=root / "assets",
-            cache=root / "cache",
-            themes=root / "themes",
-            logs=root / "logs",
-            settings=root / "settings.json",
-        )
+        return cls(root=root,database=root / "library.db",assets=root / "assets",cache=root / "cache",themes=root / "themes",logs=root / "logs",settings=root / "settings.json")
 
     def ensure(self) -> "TerminalPaths":
         self.root.mkdir(parents=True, exist_ok=True)
