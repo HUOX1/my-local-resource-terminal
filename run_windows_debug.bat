@@ -2,10 +2,10 @@
 setlocal
 cd /d "%~dp0"
 if exist ".venv\Scripts\python.exe" (
-  ".venv\Scripts\python.exe" -m app.main
+  ".venv\Scripts\python.exe" -m terminal_launcher
   set "APP_EXIT=%ERRORLEVEL%"
   echo.
-  echo Application exited with code %APP_EXIT%.
+  echo Terminal exited with code %APP_EXIT%.
   pause
   exit /b %APP_EXIT%
 ) else (
