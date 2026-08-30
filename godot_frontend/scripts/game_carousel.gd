@@ -76,6 +76,9 @@ func _emit_selection() -> void:
     selection_changed.emit(selected_index, games[selected_index])
 
 func _input(event: InputEvent) -> void:
+    if not visible or cases.is_empty():
+        return
+
     if event is InputEventMouseButton:
         var mouse_event: InputEventMouseButton = event as InputEventMouseButton
         if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -87,9 +90,10 @@ func _input(event: InputEvent) -> void:
             get_viewport().set_input_as_handled()
             return
         if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_LEFT:
-            _handle_click(mouse_event.position)
-            get_viewport().set_input_as_handled()
+            if _handle_click(mouse_event.position):
+                get_viewport().set_input_as_handled()
             return
+
     if event is InputEventKey:
         var key_event: InputEventKey = event as InputEventKey
         if key_event.pressed and not key_event.echo:
@@ -125,9 +129,10 @@ func _process(_delta: float) -> void:
         normalized.y = clampf(normalized.y, -1.0, 1.0)
         hovered_case.set_hover(true, normalized)
 
-func _handle_click(position_2d: Vector2) -> void:
+func _handle_click(position_2d: Vector2) -> bool:
     if camera == null or cases.is_empty():
-        return
+        return false
+
     var clicked_index: int = -1
     var best: float = 999999.0
     for i: int in range(cases.size()):
@@ -137,20 +142,26 @@ func _handle_click(position_2d: Vector2) -> void:
         if distance < 145.0 and distance < best:
             best = distance
             clicked_index = i
+
     if clicked_index < 0:
-        return
+        return false
+
     if clicked_index != selected_index:
         select_index(clicked_index)
-        return
+        return true
+
     var now_msec: int = Time.get_ticks_msec()
     var is_double: bool = now_msec - _last_click_msec <= 330
     _last_click_msec = now_msec
     _click_generation += 1
     var generation: int = _click_generation
+
     if is_double:
         main_case_double_clicked.emit(games[selected_index])
-        return
+        return true
+
     _emit_single_click_after_delay(generation)
+    return true
 
 func _emit_single_click_after_delay(generation: int) -> void:
     await get_tree().create_timer(0.34).timeout
