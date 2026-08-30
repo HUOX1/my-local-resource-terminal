@@ -1,0 +1,34 @@
+{
+  "id": "classic_violet",
+  "name": "Classic Violet",
+  "colors": {
+    "base_top": "#10051f",
+    "base_bottom": "#02040f",
+    "accent": "#9b5cff",
+    "accent_secondary": "#37a8ff",
+    "text": "#f3efff",
+    "muted_text": "#8f91aa"
+  },
+  "ambient": {
+    "wave_speed": 0.52,
+    "wave_strength": 0.82,
+    "symbol_amount": 36,
+    "symbol_opacity": 0.24,
+    "glow_strength": 0.18,
+    "particle_amount": 0
+  },
+  "audio": {
+    "music": "",
+    "music_volume": 0.35,
+    "loop": true,
+    "fade_in_ms": 900,
+    "fade_out_ms": 500,
+    "preview_ducking": 0.3
+  },
+  "icons": {
+    "set": ""
+  },
+  "transitions": {
+    "speed": 1.0
+  }
+}

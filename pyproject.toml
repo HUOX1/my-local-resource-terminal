@@ -3,8 +3,8 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "local-resource-terminal"
-version = "0.6.0"
+name = "g3"
+version = "0.6.1"
 requires-python = ">=3.11"
 dependencies = [
     "Pillow>=10,<13",
@@ -15,15 +15,15 @@ dependencies = [
 test = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2"]
 
 [tool.pytest.ini_options]
-testpaths = ["terminal_tests"]
+testpaths = ["g3_tests"]
 
 [project.scripts]
-local-resource-terminal = "terminal_launcher.__main__:main"
+g3 = "g3_launcher.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["terminal_core*", "terminal_launcher*"]
-exclude = ["terminal_tests*", "terminal_tools*", "godot_frontend*"]
+include = ["g3_core*", "g3_launcher*"]
+exclude = ["g3_tests*", "g3_tools*", "g3_frontend*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-terminal_core = ["schema.sql"]
+g3_core = ["schema.sql"]
