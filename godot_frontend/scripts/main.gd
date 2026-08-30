@@ -250,7 +250,7 @@ func _set_section(index: int, persist: bool = true) -> void:
     if section != "GAMES":
         _close_preview()
     else:
-        title_label.text = String(_selected_game.get("title", "GAMES"))
+        title_label.text = str(_selected_game.get("title", "GAMES"))
 
     if persist and backend != null and backend.is_connected_to_backend():
         backend.request("state.update", {"last_section": section.to_lower()})
@@ -272,8 +272,8 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
         _pending_state_id = ""
         if ok and data is Dictionary:
             var state: Dictionary = data as Dictionary
-            _restore_item_id = String(state.get("last_item_id", ""))
-            _restore_section = String(state.get("last_section", "games")).to_upper()
+            _restore_item_id = str(state.get("last_item_id", ""))
+            _restore_section = str(state.get("last_section", "games")).to_upper()
             var index: int = XMB_SECTIONS.find(_restore_section)
             if index >= 0:
                 _set_section(index, false)
@@ -323,14 +323,14 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
         _pending_launch_id = ""
         if not ok:
             backend_label.text = "LAUNCH FAILED"
-            backend_label.tooltip_text = String(error)
+            backend_label.tooltip_text = str(error)
         return
 
     if request_id == _pending_create_id:
         _pending_create_id = ""
         if not ok:
             backend_label.text = "ADD GAME FAILED"
-            backend_label.tooltip_text = String(error)
+            backend_label.tooltip_text = str(error)
         return
 
 func _on_backend_event(event_type: String, payload: Dictionary) -> void:
@@ -341,7 +341,7 @@ func _on_backend_event(event_type: String, payload: Dictionary) -> void:
         RenderingServer.render_loop_enabled = false
         get_window().hide()
     elif event_type == "game.exited":
-        _restore_item_id = String(payload.get("item_id", ""))
+        _restore_item_id = str(payload.get("item_id", ""))
         RenderingServer.render_loop_enabled = true
         get_window().show()
         get_window().borderless = true
@@ -353,8 +353,8 @@ func _on_backend_event(event_type: String, payload: Dictionary) -> void:
 func _on_selection_changed(_index: int, game: Dictionary) -> void:
     _selected_game = game
     if section_index == 0:
-        title_label.text = String(game.get("title", "GAMES"))
-    var item_id: String = String(game.get("id", ""))
+        title_label.text = str(game.get("title", "GAMES"))
+    var item_id: String = str(game.get("id", ""))
     if not item_id.is_empty() and backend != null and backend.is_connected_to_backend():
         backend.request("state.update", {"last_item_id": item_id})
     if _preview_open:
@@ -370,7 +370,7 @@ func _on_main_case_clicked(game: Dictionary) -> void:
 
 func _on_main_case_double_clicked(game: Dictionary) -> void:
     _preview_generation += 1
-    var item_id: String = String(game.get("id", ""))
+    var item_id: String = str(game.get("id", ""))
     if item_id.is_empty():
         return
     _pending_launch_id = backend.request("game.launch", {"id": item_id})
@@ -381,12 +381,12 @@ func _schedule_preview(game: Dictionary) -> void:
     await get_tree().create_timer(PREVIEW_SETTLE_SECONDS).timeout
     if generation != _preview_generation or not _preview_open:
         return
-    if String(game.get("id", "")) != String(_selected_game.get("id", "")):
+    if str(game.get("id", "")) != str(_selected_game.get("id", "")):
         return
     _request_preview(game)
 
 func _request_preview(game: Dictionary) -> void:
-    var item_id: String = String(game.get("id", ""))
+    var item_id: String = str(game.get("id", ""))
     if item_id.is_empty():
         preview.show_game(game, {})
         return
@@ -400,7 +400,7 @@ func _close_preview() -> void:
 
 func _restore_selection_by_id(item_id: String) -> void:
     for i: int in range(carousel.games.size()):
-        if String(carousel.games[i].get("id", "")) == item_id:
+        if str(carousel.games[i].get("id", "")) == item_id:
             carousel.select_index(i)
             return
 
@@ -427,8 +427,8 @@ func _apply_theme_audio(theme: Dictionary) -> void:
         theme_music_player.stream = null
         return
     var audio: Dictionary = audio_value as Dictionary
-    var music_rel: String = String(audio.get("music", ""))
-    var theme_dir: String = String(theme.get("directory", ""))
+    var music_rel: String = str(audio.get("music", ""))
+    var theme_dir: String = str(theme.get("directory", ""))
     if not _theme_music_enabled or music_rel.is_empty() or theme_dir.is_empty():
         theme_music_player.stop()
         theme_music_player.stream = null
