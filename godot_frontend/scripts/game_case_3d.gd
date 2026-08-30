@@ -21,7 +21,8 @@ func configure(game: Dictionary) -> void:
     item_id = str(game.get("id", ""))
     title_text = str(game.get("title", "Untitled"))
     _build_case()
-    var cover_path: String = str(game.get("cover", ""))
+    var cover_value: Variant = game.get("cover", "")
+    var cover_path: String = "" if cover_value == null else str(cover_value)
     if not cover_path.is_empty():
         set_cover_path(cover_path)
 
