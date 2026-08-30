@@ -3,16 +3,20 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "local-movie-manager"
-version = "0.5.0.17.1"
+name = "local-resource-terminal"
+version = "0.6.0"
 requires-python = ">=3.11"
-dependencies = ["PySide6>=6,<7", "Pillow>=10,<13", "websockets>=15,<16"]
+dependencies = [
+    "PySide6>=6,<7",
+    "Pillow>=10,<13",
+    "websockets>=15,<16",
+]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<9", "pytest-qt>=4,<5"]
+test = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "pytest-qt>=4,<5"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "terminal_tests"]
 
 [project.scripts]
-local-movie-manager = "app.main:main"
+local-resource-terminal = "terminal_launcher.__main__:main"
