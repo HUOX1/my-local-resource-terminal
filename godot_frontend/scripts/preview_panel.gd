@@ -75,12 +75,12 @@ func _build_ui() -> void:
 
 func show_game(game: Dictionary, manifest: Dictionary = {}) -> void:
     visible = true
-    _title.text = String(game.get("title", "Untitled"))
-    _description.text = String(game.get("description", ""))
+    _title.text = str(game.get("title", "Untitled"))
+    _description.text = str(game.get("description", ""))
     _stop_media()
     _status.text = ""
 
-    var video_path: String = String(manifest.get("video_ogv", ""))
+    var video_path: String = str(manifest.get("video_ogv", ""))
     if not video_path.is_empty():
         var stream: VideoStreamTheora = VideoStreamTheora.new()
         stream.file = video_path
@@ -96,7 +96,7 @@ func show_game(game: Dictionary, manifest: Dictionary = {}) -> void:
     if gif_variant is Array and not (gif_variant as Array).is_empty():
         _gif_frames.clear()
         for path_value: Variant in gif_variant as Array:
-            _gif_frames.append(String(path_value))
+            _gif_frames.append(str(path_value))
         var durations_variant: Variant = manifest.get("gif_durations_ms", [])
         _gif_durations.clear()
         if durations_variant is Array:
@@ -109,17 +109,17 @@ func show_game(game: Dictionary, manifest: Dictionary = {}) -> void:
     else:
         var screenshots_variant: Variant = manifest.get("screenshots", [])
         if screenshots_variant is Array and not (screenshots_variant as Array).is_empty():
-            _load_image(String((screenshots_variant as Array)[0]))
+            _load_image(str((screenshots_variant as Array)[0]))
             _status.text = "SCREENSHOT"
         else:
-            var background_path: String = String(manifest.get("background", ""))
+            var background_path: String = str(manifest.get("background", ""))
             if not background_path.is_empty():
                 _load_image(background_path)
                 _status.text = "BACKGROUND"
             else:
                 _status.text = "NO PREVIEW MEDIA"
 
-    _play_optional_audio(String(manifest.get("preview_audio", "")))
+    _play_optional_audio(str(manifest.get("preview_audio", "")))
 
 func hide_preview() -> void:
     _stop_media()
