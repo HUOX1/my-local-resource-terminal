@@ -8,7 +8,7 @@ signal main_case_double_clicked(game: Dictionary)
 const CASE_SCRIPT: Script = preload("res://scripts/game_case_3d.gd")
 
 var games: Array[Dictionary] = []
-var cases: Array[GameCase3D] = []
+var cases: Array = []
 var selected_index: int = 0
 var preview_mode: bool = false
 var camera: Camera3D
@@ -28,7 +28,7 @@ func set_games(value: Array[Dictionary]) -> void:
     cases.clear()
     selected_index = clampi(selected_index, 0, maxi(games.size() - 1, 0))
     for game: Dictionary in games:
-        var item: GameCase3D = CASE_SCRIPT.new() as GameCase3D
+        var item = CASE_SCRIPT.new()
         add_child(item)
         item.configure(game)
         cases.append(item)
@@ -61,7 +61,7 @@ func _layout_targets() -> void:
     for i: int in range(cases.size()):
         var relative: float = float(i - selected_index)
         var distance: float = absf(relative)
-        var case: GameCase3D = cases[i]
+        var case = cases[i]
         case.target_position = Vector3(
             center_x + relative * 1.62,
             -distance * 0.05,
@@ -105,7 +105,7 @@ func _process(_delta: float) -> void:
     var nearest_index: int = -1
     var nearest_distance: float = 999999.0
     for i: int in range(cases.size()):
-        var case: GameCase3D = cases[i]
+        var case = cases[i]
         if camera.is_position_behind(case.global_position):
             continue
         var screen: Vector2 = camera.unproject_position(case.global_position)
@@ -118,7 +118,7 @@ func _process(_delta: float) -> void:
             cases[_hover_index].set_hover(false)
         _hover_index = nearest_index
     if _hover_index >= 0:
-        var hovered_case: GameCase3D = cases[_hover_index]
+        var hovered_case = cases[_hover_index]
         var center: Vector2 = camera.unproject_position(hovered_case.global_position)
         var normalized: Vector2 = (mouse - center) / Vector2(130.0, 190.0)
         normalized.x = clampf(normalized.x, -1.0, 1.0)
@@ -131,7 +131,7 @@ func _handle_click(position_2d: Vector2) -> void:
     var clicked_index: int = -1
     var best: float = 999999.0
     for i: int in range(cases.size()):
-        var case: GameCase3D = cases[i]
+        var case = cases[i]
         var screen: Vector2 = camera.unproject_position(case.global_position)
         var distance: float = position_2d.distance_to(screen)
         if distance < 145.0 and distance < best:
