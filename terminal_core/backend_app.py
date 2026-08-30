@@ -137,20 +137,20 @@ class BackendApplication:
             "playtime_seconds": game.playtime_seconds,
             "last_played_at": game.last_played_at.isoformat() if game.last_played_at else None,
             "installed_state": game.installed_state,
-            "cover": str(cover_asset.path) if cover_asset else None,
+            "cover": str(cover_asset.path) if cover_asset else "",
         }
 
     @staticmethod
     def _preview_to_dict(manifest: PreviewManifest) -> dict[str, object]:
         return {
-            "cover": str(manifest.cover) if manifest.cover else None,
-            "background": str(manifest.background) if manifest.background else None,
+            "cover": str(manifest.cover) if manifest.cover else "",
+            "background": str(manifest.background) if manifest.background else "",
             "screenshots": [str(path) for path in manifest.screenshots],
             "gif_frames": [str(path) for path in manifest.gif_frames],
             "gif_durations_ms": manifest.gif_durations_ms,
-            "video_ogv": str(manifest.video_ogv) if manifest.video_ogv else None,
-            "preview_audio": str(manifest.preview_audio) if manifest.preview_audio else None,
-            "logo": str(manifest.logo) if manifest.logo else None,
+            "video_ogv": str(manifest.video_ogv) if manifest.video_ogv else "",
+            "preview_audio": str(manifest.preview_audio) if manifest.preview_audio else "",
+            "logo": str(manifest.logo) if manifest.logo else "",
         }
 
     @staticmethod
