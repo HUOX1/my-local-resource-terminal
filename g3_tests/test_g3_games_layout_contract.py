@@ -11,10 +11,11 @@ def test_duplicate_section_title_is_removed():
     assert "\n    title_label = Label.new()" not in text
 
 
-def test_browse_anchor_is_left_of_center():
+def test_browse_anchor_is_now_near_screen_center():
     text = CAROUSEL.read_text(encoding="utf-8")
     assert "BROWSE_ANCHOR_X" in text
-    assert "BROWSE_ANCHOR_X: float = -7." in text
+    assert "BROWSE_ANCHOR_X: float = -0.35" in text
+    assert "PREVIEW_ANCHOR_X: float = -3.10" in text
 
 
 def test_case_caption_uses_projected_selected_case_position():

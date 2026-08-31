@@ -6,15 +6,19 @@ const CAROUSEL_SCRIPT: Script = preload("res://scripts/game_carousel.gd")
 const PREVIEW_SCRIPT: Script = preload("res://scripts/preview_panel.gd")
 const MANAGE_MENU_SCRIPT: Script = preload("res://scripts/manage_menu.gd")
 const LAUNCH_PROFILE_DIALOG_SCRIPT: Script = preload("res://scripts/launch_profile_dialog.gd")
+const GAME_METADATA_DIALOG_SCRIPT: Script = preload("res://scripts/game_metadata_dialog.gd")
 const AUDIO_LOADER: Script = preload("res://scripts/audio_file_loader.gd")
 
 const XMB_SECTIONS: Array[String] = ["GAMES", "MOVIES", "COMICS", "MUSIC", "SEARCH", "SYSTEM"]
+const XMB_SECTION_LABELS: Array[String] = ["游戏", "电影", "漫画", "音乐", "搜索", "系统"]
 const PREVIEW_SETTLE_SECONDS: float = 0.40
 
 var backend
 var collection_world: Node3D
 var camera: Camera3D
-var fill_light: OmniLight3D
+var key_light: DirectionalLight3D
+var fill_light: DirectionalLight3D
+var rim_light: DirectionalLight3D
 var carousel
 var preview
 var xmb_buttons: Array[Button] = []
@@ -30,6 +34,7 @@ var system_panel: VBoxContainer
 var add_game_dialog: FileDialog
 var manage_menu
 var launch_profile_dialog
+var game_metadata_dialog
 var theme_music_player: AudioStreamPlayer
 var _ambient_material: ShaderMaterial
 var _ambient_mesh: MeshInstance3D
@@ -44,6 +49,8 @@ var _pending_settings_id: String = ""
 var _pending_create_id: String = ""
 var _pending_profile_get_id: String = ""
 var _pending_profile_update_id: String = ""
+var _pending_metadata_get_id: String = ""
+var _pending_metadata_update_id: String = ""
 var _preview_generation: int = 0
 var _restore_item_id: String = ""
 var _restore_section: String = "GAMES"
@@ -111,18 +118,35 @@ func _build_3d_world() -> void:
     camera.current = true
     collection_world.add_child(camera)
 
-    var light: DirectionalLight3D = DirectionalLight3D.new()
-    light.rotation_degrees = Vector3(-15.0, -25.0, 0.0)
-    light.light_energy = 1.15
-    light.light_color = Color(0.82, 0.86, 1.0)
-    collection_world.add_child(light)
+    var world_environment: WorldEnvironment = WorldEnvironment.new()
+    var environment: Environment = Environment.new()
+    environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+    environment.ambient_light_color = Color(0.46, 0.52, 0.56, 1.0)
+    environment.ambient_light_energy = 0.12
+    environment.ambient_light_sky_contribution = 0.0
+    environment.ssao_enabled = true
+    environment.ssao_radius = 0.18
+    environment.ssao_intensity = 1.10
+    world_environment.environment = environment
+    collection_world.add_child(world_environment)
 
-    fill_light = OmniLight3D.new()
-    fill_light.position = Vector3(-2.5, 1.0, 3.0)
-    fill_light.omni_range = 8.0
-    fill_light.light_energy = 1.3
-    fill_light.light_color = _theme_accent
+    key_light = DirectionalLight3D.new()
+    key_light.rotation_degrees = Vector3(-24.0, -34.0, 0.0)
+    key_light.light_energy = 0.74
+    key_light.light_color = Color(1.0, 0.94, 0.88, 1.0)
+    collection_world.add_child(key_light)
+
+    fill_light = DirectionalLight3D.new()
+    fill_light.rotation_degrees = Vector3(-8.0, 38.0, 0.0)
+    fill_light.light_energy = 0.18
+    fill_light.light_color = Color(0.74, 0.84, 1.0, 1.0)
     collection_world.add_child(fill_light)
+
+    rim_light = DirectionalLight3D.new()
+    rim_light.rotation_degrees = Vector3(12.0, 148.0, 0.0)
+    rim_light.light_energy = 0.54
+    rim_light.light_color = _theme_accent.lerp(Color.WHITE, 0.55)
+    collection_world.add_child(rim_light)
 
     carousel = CAROUSEL_SCRIPT.new()
     collection_world.add_child(carousel)
@@ -147,7 +171,7 @@ func _build_ui() -> void:
         var button: Button = Button.new()
         button.position = Vector2(x, 46.0)
         button.size = Vector2(144.0, 48.0)
-        button.text = XMB_SECTIONS[i]
+        button.text = XMB_SECTION_LABELS[i]
         button.flat = true
         button.focus_mode = Control.FOCUS_NONE
         button.add_theme_font_size_override("font_size", 17)
@@ -179,7 +203,7 @@ func _build_ui() -> void:
     backend_label.position = Vector2(-340.0, 60.0)
     backend_label.size = Vector2(220.0, 28.0)
     backend_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    backend_label.text = "BACKEND CONNECTING"
+    backend_label.text = "后端连接中"
     backend_label.add_theme_font_size_override("font_size", 12)
     ui.add_child(backend_label)
 
@@ -207,14 +231,14 @@ func _build_ui() -> void:
     hint_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
     hint_label.position = Vector2(78.0, -72.0)
     hint_label.size = Vector2(820.0, 30.0)
-    hint_label.text = "滚轮 / ← → 选择    单击预览    双击启动    右键管理"
+    hint_label.text = "滚轮 / ← → 选择    单击预览    聚焦后拖动盒子旋转    双击启动    右键管理    Ctrl+Q 退出"
     hint_label.add_theme_font_size_override("font_size", 12)
     hint_label.add_theme_color_override("font_color", _theme_muted)
     ui.add_child(hint_label)
 
     preview = PREVIEW_SCRIPT.new()
-    preview.position = Vector2(760.0, 175.0)
-    preview.size = Vector2(700.0, 560.0)
+    preview.position = Vector2(708.0, 150.0)
+    preview.size = Vector2(660.0, 592.0)
     preview.visible = false
     preview.media_audio_activity_changed.connect(_on_preview_audio_activity_changed)
     ui.add_child(preview)
@@ -249,8 +273,14 @@ func _build_ui() -> void:
     window_button.pressed.connect(_toggle_window_mode)
     system_panel.add_child(window_button)
 
+    var exit_button: Button = Button.new()
+    exit_button.text = "退出 G3"
+    exit_button.custom_minimum_size = Vector2(320.0, 46.0)
+    exit_button.pressed.connect(_exit_application)
+    system_panel.add_child(exit_button)
+
     var system_note: Label = Label.new()
-    system_note.text = "G3 当前功能地图\n已可用：启动器 / Python Core / XMB / 添加游戏 / Classic Cyan / GPU 动态背景\n待实机验收：真实 3D GLB 游戏盒 / 预览 / 启动与返回 / 状态恢复\n本轮新增：右键管理 / 启动设置 / Direct·Launcher·Emulator Launch Profile\n仅保留入口：Movies / Comics / Music / Search\n数据目录：%LOCALAPPDATA%\\G3  ·  Backend 127.0.0.1"
+    system_note.text = "G3 当前状态\n已可用：启动器 / Python Core / 本地库 / 中文 XMB / 右键管理 / 启动设置 / 编辑资料 / 实体 3D 游戏盒\n本轮更新：浏览态回到大封面居中轮播、聚焦主盒显著放大、亚克力半透明盒体、预览文字/媒体入场动画、右键菜单改为清晰中文面板、预览详情点击不再误返回、System 增加退出 G3 / Ctrl+Q\n性能策略：默认 60 FPS 上限、轻量 MSAA、弱化背景与 SSAO 开销、游戏运行时最小化并暂停渲染\n当前仍保留入口：电影 / 漫画 / 音乐 / 搜索\n数据目录：%LOCALAPPDATA%\\G3  ·  Backend 127.0.0.1"
     system_note.add_theme_font_size_override("font_size", 13)
     system_note.add_theme_color_override("font_color", _theme_muted)
     system_panel.add_child(system_note)
@@ -270,6 +300,10 @@ func _build_ui() -> void:
     launch_profile_dialog = LAUNCH_PROFILE_DIALOG_SCRIPT.new()
     launch_profile_dialog.save_requested.connect(_on_launch_profile_save_requested)
     add_child(launch_profile_dialog)
+
+    game_metadata_dialog = GAME_METADATA_DIALOG_SCRIPT.new()
+    game_metadata_dialog.save_requested.connect(_on_game_metadata_save_requested)
+    add_child(game_metadata_dialog)
 
 func _build_backend() -> void:
     backend = BACKEND_CLIENT_SCRIPT.new()
@@ -294,8 +328,6 @@ func _unhandled_input(event: InputEvent) -> void:
     var mouse_event: InputEventMouseButton = event as InputEventMouseButton
     if not mouse_event.pressed or mouse_event.button_index != MOUSE_BUTTON_LEFT:
         return
-    if preview.visible and preview.get_global_rect().has_point(mouse_event.position):
-        return
     _close_preview()
     get_viewport().set_input_as_handled()
 
@@ -305,7 +337,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
     var key: InputEventKey = event as InputEventKey
     if not key.pressed or key.echo:
         return
-    if key.keycode == KEY_ESCAPE and _preview_open:
+    if key.ctrl_pressed and key.keycode == KEY_Q:
+        _exit_application()
+        get_viewport().set_input_as_handled()
+    elif key.keycode == KEY_ESCAPE and _preview_open:
         _close_preview()
         get_viewport().set_input_as_handled()
     elif key.keycode == KEY_TAB:
@@ -320,7 +355,10 @@ func _set_section(index: int, persist: bool = true) -> void:
     for i: int in range(xmb_buttons.size()):
         var active: bool = i == section_index
         var button: Button = xmb_buttons[i]
-        button.add_theme_color_override("font_color", _theme_text if active else _theme_muted)
+        button.add_theme_color_override(
+            "font_color",
+            _theme_text if active else _theme_muted
+        )
         button.add_theme_font_size_override("font_size", 22 if active else 16)
 
     var section: String = XMB_SECTIONS[section_index]
@@ -328,7 +366,7 @@ func _set_section(index: int, persist: bool = true) -> void:
     system_panel.visible = section == "SYSTEM"
     placeholder_label.visible = section != "GAMES" and section != "SYSTEM"
     if placeholder_label.visible:
-        placeholder_label.text = section + "  /  当前仅保留模块入口"
+        placeholder_label.text = _section_label(section) + "  /  当前仅保留模块入口"
     if section != "GAMES":
         _close_preview()
         _set_case_caption_visible(false, true)
@@ -340,14 +378,14 @@ func _set_section(index: int, persist: bool = true) -> void:
         backend.request("state.update", {"last_section": section.to_lower()})
 
 func _on_backend_connected() -> void:
-    backend_label.text = "BACKEND CONNECTED"
+    backend_label.text = "后端已连接"
     _pending_state_id = backend.request("state.get", {})
     _pending_games_id = backend.request("library.games.list", {})
     _pending_theme_id = backend.request("theme.current", {})
     _pending_settings_id = backend.request("settings.get", {})
 
 func _on_backend_disconnected(code: int, reason: String) -> void:
-    backend_label.text = "BACKEND OFFLINE  %d" % code
+    backend_label.text = "后端离线  %d" % code
     if not reason.is_empty():
         backend_label.tooltip_text = reason
 
@@ -421,6 +459,24 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
             _show_runtime_error("启动设置保存失败", _error_message(error))
         return
 
+    if request_id == _pending_metadata_get_id:
+        _pending_metadata_get_id = ""
+        if ok and data is Dictionary:
+            game_metadata_dialog.show_metadata(str(_selected_game.get("id", "")), data as Dictionary)
+        else:
+            _show_runtime_error("资料读取失败", _error_message(error))
+        return
+
+    if request_id == _pending_metadata_update_id:
+        _pending_metadata_update_id = ""
+        if ok:
+            backend_label.text = "资料已保存"
+            _clear_runtime_error()
+            _pending_games_id = backend.request("library.games.list", {})
+        else:
+            _show_runtime_error("资料保存失败", _error_message(error))
+        return
+
     if request_id == _pending_launch_id:
         _pending_launch_id = ""
         if not ok:
@@ -447,27 +503,18 @@ func _on_backend_event(event_type: String, payload: Dictionary) -> void:
         backend_label.text = "等待游戏进程"
     elif event_type == "game.session_started":
         backend_label.text = "游戏运行中"
-        RenderingServer.render_loop_enabled = false
-        get_window().hide()
+        call_deferred("_enter_gameplay_mode")
     elif event_type == "game.exited":
         _restore_item_id = str(payload.get("item_id", ""))
-        RenderingServer.render_loop_enabled = true
-        get_window().show()
-        get_window().borderless = true
-        get_window().mode = Window.MODE_MAXIMIZED
-        get_window().grab_focus()
-        backend_label.text = "BACKEND CONNECTED"
+        call_deferred("_restore_from_gameplay")
+        backend_label.text = "后端已连接"
         _pending_games_id = backend.request("library.games.list", {})
     elif event_type == "backend.error":
         var error_code: String = str(payload.get("code", ""))
         if error_code.begins_with("game_"):
-            RenderingServer.render_loop_enabled = true
-            get_window().show()
-            get_window().borderless = true
-            get_window().mode = Window.MODE_MAXIMIZED
-            get_window().grab_focus()
+            call_deferred("_restore_from_gameplay")
             backend_label.text = "游戏启动失败"
-        _show_runtime_error("BACKEND ERROR", _error_message(payload))
+        _show_runtime_error("后端错误", _error_message(payload))
 
 func _on_selection_changed(_index: int, game: Dictionary) -> void:
     _selected_game = game
@@ -509,7 +556,9 @@ func _on_manage_action_requested(action: String) -> void:
             if not item_id.is_empty():
                 _pending_profile_get_id = backend.request("game.launch_profile.get", {"id": item_id})
         "edit_metadata":
-            _show_runtime_error("编辑资料", "入口已建立，资料编辑器将在下一批补齐。")
+            var metadata_item_id: String = str(_selected_game.get("id", ""))
+            if not metadata_item_id.is_empty():
+                _pending_metadata_get_id = backend.request("game.metadata.get", {"id": metadata_item_id})
         "media_assets":
             _show_runtime_error("媒体素材", "入口已建立，素材管理器将在下一批补齐。")
         "remove":
@@ -528,6 +577,14 @@ func _on_launch_profile_save_requested(item_id: String, profile: Dictionary) -> 
     var payload: Dictionary = profile.duplicate(true)
     payload["id"] = item_id
     _pending_profile_update_id = backend.request("game.launch_profile.update", payload)
+
+func _on_game_metadata_save_requested(item_id: String, metadata: Dictionary) -> void:
+    if item_id.is_empty():
+        return
+    _restore_item_id = item_id
+    var payload: Dictionary = metadata.duplicate(true)
+    payload["id"] = item_id
+    _pending_metadata_update_id = backend.request("game.metadata.update", payload)
 
 func _schedule_preview(game: Dictionary) -> void:
     _preview_generation += 1
@@ -580,8 +637,8 @@ func _apply_theme(theme: Dictionary) -> void:
     _ambient_material.set_shader_parameter("wave_a", _color_vec3(wave_a))
     _ambient_material.set_shader_parameter("wave_b", _color_vec3(wave_b))
     _ambient_material.set_shader_parameter("symbol_color", _color_vec3(symbol))
-    if fill_light != null:
-        fill_light.light_color = _theme_accent
+    if rim_light != null:
+        rim_light.light_color = _theme_accent.lerp(Color.WHITE, 0.55)
     carousel.set_theme_colors(_theme_accent, _theme_secondary)
     case_title_label.add_theme_color_override("font_color", _theme_text)
     case_meta_label.add_theme_color_override("font_color", _theme_muted)
@@ -590,8 +647,14 @@ func _apply_theme(theme: Dictionary) -> void:
     var ambient_value: Variant = theme.get("ambient", {})
     if ambient_value is Dictionary:
         var ambient: Dictionary = ambient_value as Dictionary
-        _ambient_material.set_shader_parameter("wave_amount", clampf(float(ambient.get("wave_strength", 0.82)), 0.0, 1.0))
-        _ambient_material.set_shader_parameter("symbol_amount", clampf(float(ambient.get("symbol_opacity", 0.24)) * 1.75, 0.0, 1.0))
+        _ambient_material.set_shader_parameter(
+            "wave_amount",
+            clampf(float(ambient.get("wave_strength", 0.82)), 0.0, 1.0)
+        )
+        _ambient_material.set_shader_parameter(
+            "symbol_amount",
+            clampf(float(ambient.get("symbol_opacity", 0.24)) * 1.75, 0.0, 1.0)
+        )
     _set_section(section_index, false)
     _apply_theme_audio(theme)
 
@@ -694,10 +757,17 @@ func _open_add_game_dialog() -> void:
 
 func _on_game_executable_selected(path: String) -> void:
     if not backend.is_connected_to_backend():
-        backend_label.text = "BACKEND OFFLINE"
+        backend_label.text = "后端离线"
         return
     var file_name: String = path.get_file().get_basename()
-    _pending_create_id = backend.request("game.create", {"title": file_name, "executable_path": path, "working_directory": path.get_base_dir()})
+    _pending_create_id = backend.request(
+        "game.create",
+        {
+            "title": file_name,
+            "executable_path": path,
+            "working_directory": path.get_base_dir(),
+        }
+    )
 
 func _toggle_window_mode() -> void:
     if get_window().mode == Window.MODE_MAXIMIZED:
@@ -706,6 +776,33 @@ func _toggle_window_mode() -> void:
     else:
         get_window().borderless = true
         get_window().mode = Window.MODE_MAXIMIZED
+
+func _section_label(section: String) -> String:
+    var index: int = XMB_SECTIONS.find(section)
+    if index >= 0 and index < XMB_SECTION_LABELS.size():
+        return XMB_SECTION_LABELS[index]
+    return section
+
+func _enter_gameplay_mode() -> void:
+    var window: Window = get_window()
+    if window == null:
+        return
+    if window.mode != Window.MODE_MINIMIZED:
+        window.mode = Window.MODE_MINIMIZED
+    RenderingServer.render_loop_enabled = false
+
+func _restore_from_gameplay() -> void:
+    RenderingServer.render_loop_enabled = true
+    var window: Window = get_window()
+    if window == null:
+        return
+    window.borderless = true
+    if window.mode != Window.MODE_MAXIMIZED:
+        window.mode = Window.MODE_MAXIMIZED
+    window.grab_focus()
+
+func _exit_application() -> void:
+    get_tree().quit()
 
 func _on_preview_audio_activity_changed(active: bool) -> void:
     if theme_music_player == null or not theme_music_player.playing:
