@@ -46,7 +46,7 @@ def test_focus_case_is_large_front_facing_and_hover_only_tilts():
     assert "const BASE_YAW_DEGREES: float = 0.0" in case_text
     assert "const HOVER_YAW_DEGREES: float = 12.0" in case_text
     assert "hover_vector.x * HOVER_YAW_DEGREES" in case_text
-    assert "const PREVIEW_SELECTED_SCALE: float = 2.18" in carousel_text
+    assert "const PREVIEW_SELECTED_SCALE: float = 3.42" in carousel_text
     assert "PREVIEW_SELECTED_SCALE" in carousel_text
 
 

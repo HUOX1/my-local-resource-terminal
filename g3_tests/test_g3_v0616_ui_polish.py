@@ -32,7 +32,7 @@ def test_preview_panel_animates_text_and_media_and_hides_status_when_media_exist
 
 
 def test_case_and_project_include_acrylic_and_perf_defaults():
-    assert 'TRANSPARENCY_ALPHA' in CASE
-    assert 'clearcoat = 0.85' in CASE
+    assert 'TRANSPARENCY_ALPHA' not in CASE
+    assert 'clearcoat = 0.92' in CASE
     assert 'run/max_fps=60' in PROJECT
     assert 'anti_aliasing/quality/msaa_3d=1' in PROJECT

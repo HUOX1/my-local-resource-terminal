@@ -19,11 +19,12 @@ def test_g3_frontend_has_phase1_shell_files():
     assert missing == []
 
 
-def test_project_targets_godot_47_and_borderless_window():
+def test_project_targets_godot_47_and_resizable_window():
     text = (FRONTEND / "project.godot").read_text(encoding="utf-8")
     assert 'config/features=PackedStringArray("4.7")' in text
-    assert "window/size/mode=2" in text
+    assert "window/size/mode=0" in text
     assert "window/size/borderless=true" in text
+    assert "window/size/resizable=true" in text
     assert "run/max_fps=60" in text
     assert "anti_aliasing/quality/msaa_3d=1" in text
 

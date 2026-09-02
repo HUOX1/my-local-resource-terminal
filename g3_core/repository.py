@@ -60,34 +60,35 @@ class LibraryRepository:
             raise RuntimeError("created game could not be reloaded")
         return record
 
+    @staticmethod
+    def _game_select_sql(where_clause: str = "") -> str:
+        return f"""
+            SELECT li.id, li.title, li.sort_title, li.description,
+                   g.profile_type, g.launch_exe, g.launch_args, g.working_directory,
+                   g.content_path, g.monitor_exe, g.wait_timeout_s, g.run_as_admin,
+                   g.platform, g.playtime_seconds, g.last_played_at, g.installed_state,
+                   COALESCE(gm.developer, '') AS developer,
+                   COALESCE(gm.publisher, '') AS publisher,
+                   gm.release_year AS release_year,
+                   COALESCE(gm.tags, '') AS tags,
+                   COALESCE(gm.notes, '') AS notes
+            FROM library_items li
+            JOIN games g ON g.item_id = li.id
+            LEFT JOIN game_metadata gm ON gm.item_id = li.id
+            WHERE li.media_type = 'game' {where_clause}
+        """
+
     def list_games(self) -> list[GameRecord]:
         with self.database.connect() as conn:
             rows = conn.execute(
-                """
-                SELECT li.id, li.title, li.sort_title, li.description,
-                       g.profile_type, g.launch_exe, g.launch_args, g.working_directory,
-                       g.content_path, g.monitor_exe, g.wait_timeout_s, g.run_as_admin,
-                       g.platform, g.playtime_seconds, g.last_played_at, g.installed_state
-                FROM library_items li
-                JOIN games g ON g.item_id = li.id
-                WHERE li.media_type = 'game'
-                ORDER BY li.sort_title, li.id
-                """
+                self._game_select_sql() + " ORDER BY li.sort_title, li.id"
             ).fetchall()
         return [self._game_from_row(row) for row in rows]
 
     def get_game(self, item_id: str) -> GameRecord | None:
         with self.database.connect() as conn:
             row = conn.execute(
-                """
-                SELECT li.id, li.title, li.sort_title, li.description,
-                       g.profile_type, g.launch_exe, g.launch_args, g.working_directory,
-                       g.content_path, g.monitor_exe, g.wait_timeout_s, g.run_as_admin,
-                       g.platform, g.playtime_seconds, g.last_played_at, g.installed_state
-                FROM library_items li
-                JOIN games g ON g.item_id = li.id
-                WHERE li.id = ? AND li.media_type = 'game'
-                """,
+                self._game_select_sql("AND li.id = ?"),
                 (item_id,),
             ).fetchone()
         return self._game_from_row(row) if row is not None else None
@@ -129,6 +130,69 @@ class LibraryRepository:
                 (now, item_id),
             )
         return self.get_launch_profile(item_id)
+
+    def update_game_metadata(
+        self,
+        item_id: str,
+        *,
+        title: str,
+        platform: str = "",
+        description: str = "",
+        developer: str = "",
+        publisher: str = "",
+        release_year: int | None = None,
+        tags: str = "",
+        notes: str = "",
+    ) -> GameRecord:
+        clean_title = str(title).strip()
+        if not clean_title:
+            raise ValueError("title is required")
+        year = None if release_year in (None, 0) else int(release_year)
+        if year is not None and not 1000 <= year <= 9999:
+            raise ValueError("release_year must be a four-digit year")
+        now = datetime.now(timezone.utc).isoformat()
+        with self.database.connect() as conn:
+            item_cursor = conn.execute(
+                """
+                UPDATE library_items
+                SET title = ?, sort_title = ?, description = ?, updated_at = ?
+                WHERE id = ? AND media_type = 'game'
+                """,
+                (clean_title, clean_title.casefold(), str(description).strip(), now, item_id),
+            )
+            if item_cursor.rowcount != 1:
+                raise KeyError(item_id)
+            game_cursor = conn.execute(
+                "UPDATE games SET platform = ? WHERE item_id = ?",
+                (str(platform).strip(), item_id),
+            )
+            if game_cursor.rowcount != 1:
+                raise KeyError(item_id)
+            conn.execute(
+                """
+                INSERT INTO game_metadata
+                    (item_id, developer, publisher, release_year, tags, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(item_id) DO UPDATE SET
+                    developer = excluded.developer,
+                    publisher = excluded.publisher,
+                    release_year = excluded.release_year,
+                    tags = excluded.tags,
+                    notes = excluded.notes
+                """,
+                (
+                    item_id,
+                    str(developer).strip(),
+                    str(publisher).strip(),
+                    year,
+                    str(tags).strip(),
+                    str(notes).strip(),
+                ),
+            )
+        game = self.get_game(item_id)
+        if game is None:
+            raise KeyError(item_id)
+        return game
 
     def update_play_stats(self, item_id: str, seconds: int, ended_at: datetime) -> None:
         now_iso = ended_at.astimezone(timezone.utc).isoformat()
@@ -225,7 +289,11 @@ class LibraryRepository:
         return GameRecord(
             id=str(row["id"]), title=str(row["title"]), sort_title=str(row["sort_title"]),
             description=str(row["description"]), launch_profile=profile,
-            platform=str(row["platform"]), playtime_seconds=int(row["playtime_seconds"]),
+            platform=str(row["platform"]), developer=str(row["developer"]),
+            publisher=str(row["publisher"]),
+            release_year=int(row["release_year"]) if row["release_year"] is not None else None,
+            tags=str(row["tags"]), notes=str(row["notes"]),
+            playtime_seconds=int(row["playtime_seconds"]),
             last_played_at=last_played, installed_state=str(row["installed_state"]),
         )
 

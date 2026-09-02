@@ -17,6 +17,6 @@ def test_debug_entry_runs_same_v06_launcher():
 
 def test_g3_dependencies_include_local_websocket():
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "0.6.1.6"' in text
+    assert 'version = "0.6.1.9.2"' in text
     assert '"websockets>=15,<16"' in text
     assert 'g3 = "g3_launcher.__main__:main"' in text

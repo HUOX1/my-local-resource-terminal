@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass, fields
 import json
 from pathlib import Path
 
+DEFAULT_START_SECTIONS = {"games", "movies", "comics", "music", "search", "system"}
+
 
 @dataclass(slots=True)
 class TerminalSettings:
@@ -16,7 +18,8 @@ class TerminalSettings:
     preview_auto_play: bool = True
     theme_music: bool = True
     theme_music_volume: float = 0.35
-    restore_last_section: bool = True
+    restore_last_section: bool = False
+    default_start_section: str = "games"
     restore_last_item: bool = True
     current_theme: str = "classic_cyan"
     ffmpeg_path: str = "ffmpeg"
@@ -67,6 +70,8 @@ class TerminalSettings:
     def _validate(self) -> None:
         if self.display_mode not in {"borderless", "windowed", "fullscreen"}:
             raise ValueError(f"invalid display_mode: {self.display_mode}")
+        if self.default_start_section not in DEFAULT_START_SECTIONS:
+            raise ValueError(f"invalid default_start_section: {self.default_start_section}")
         if self.monitor < 0:
             raise ValueError("monitor must be >= 0")
         if not 0.0 <= self.preview_volume <= 1.0:

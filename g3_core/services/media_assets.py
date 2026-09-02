@@ -43,6 +43,21 @@ class MediaAssetService:
         self._runner = runner
         self.cache_root.mkdir(parents=True, exist_ok=True)
 
+    def resolve_cover(self, item_id: str) -> Path | None:
+        game = self.repository.get_game(item_id)
+        if game is None:
+            raise KeyError(item_id)
+
+        options: list[tuple[int, int, Path]] = []
+        source_rank = {"manual": 0, "auto": 1, "generated": 2}
+        for asset in self.repository.list_media_assets(item_id, "cover"):
+            options.append((source_rank[asset.source], asset.priority, asset.path))
+        for index, path in enumerate(self._discover(game.executable_path.parent).get("cover", [])):
+            options.append((1, index, path))
+        if not options:
+            return None
+        return min(options, key=lambda item: (item[0], item[1], str(item[2])))[2]
+
     def resolve_preview(self, item_id: str) -> PreviewManifest:
         game = self.repository.get_game(item_id)
         if game is None:

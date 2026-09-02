@@ -12,8 +12,9 @@ const COVER_PRINT_BRIGHTNESS: float = 0.90
 const DRAG_YAW_LIMIT_DEGREES: float = 55.0
 const DRAG_PITCH_LIMIT_DEGREES: float = 14.0
 const DRAG_RETURN_DEGREES_PER_SECOND: float = 52.0
-const PLASTIC_COLOR: Color = Color(0.75, 0.81, 0.84, 0.84)
-const SPINE_COLOR: Color = Color(0.57, 0.66, 0.70, 0.76)
+const PLASTIC_COLOR: Color = Color(0.72, 0.80, 0.84, 1.0)
+const SPINE_COLOR: Color = Color(0.52, 0.62, 0.67, 1.0)
+const FOCUS_BACKGROUND_BRIGHTNESS: float = 0.34
 const EMPTY_COVER_COLOR: Color = Color(0.18, 0.21, 0.22, 1.0)
 
 var item_id: String = ""
@@ -26,6 +27,9 @@ var hover_vector: Vector2 = Vector2.ZERO
 var _dragging: bool = false
 var _drag_yaw_degrees: float = 0.0
 var _drag_pitch_degrees: float = 0.0
+var _focus_background: bool = false
+var _browse_brightness: float = 1.0
+var _slot_yaw_degrees: float = 0.0
 
 var _model_root: Node3D
 var _plastic_meshes: Array[MeshInstance3D] = []
@@ -110,13 +114,13 @@ func _apply_case_materials() -> void:
 func _make_acrylic_material(color: Color, roughness_value: float) -> StandardMaterial3D:
     var material: StandardMaterial3D = StandardMaterial3D.new()
     material.albedo_color = color
-    material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
     material.metallic = 0.0
     material.roughness = roughness_value
     material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
     material.clearcoat_enabled = true
-    material.clearcoat = 0.85
-    material.clearcoat_roughness = 0.18
+    material.clearcoat = 0.92
+    material.clearcoat_roughness = 0.14
     material.cull_mode = BaseMaterial3D.CULL_BACK
     return material
 
@@ -140,10 +144,55 @@ func set_cover_path(path: String) -> void:
     material.roughness = 0.52
     material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+    _refresh_focus_materials()
 
 func set_theme_colors(accent: Color, secondary: Color) -> void:
     _accent = accent
     _secondary = secondary
+
+func set_browse_style(brightness: float, yaw_degrees: float) -> void:
+    var next_brightness: float = clampf(brightness, 0.12, 1.0)
+    var brightness_changed: bool = not is_equal_approx(_browse_brightness, next_brightness)
+    _browse_brightness = next_brightness
+    _slot_yaw_degrees = yaw_degrees
+    if brightness_changed:
+        _refresh_focus_materials()
+
+func set_focus_background(value: bool) -> void:
+    if _focus_background == value:
+        return
+    _focus_background = value
+    _refresh_focus_materials()
+
+func _refresh_focus_materials() -> void:
+    var brightness: float = FOCUS_BACKGROUND_BRIGHTNESS if _focus_background else _browse_brightness
+    brightness = clampf(brightness, 0.12, 1.0)
+
+    var plastic_color: Color = PLASTIC_COLOR * brightness
+    plastic_color.a = 1.0
+    var spine_color: Color = SPINE_COLOR * brightness
+    spine_color.a = 1.0
+
+    for mesh_node: MeshInstance3D in _plastic_meshes:
+        var material: StandardMaterial3D = mesh_node.material_override as StandardMaterial3D
+        if material != null:
+            material.albedo_color = plastic_color
+            material.clearcoat = 0.92 * brightness
+    for mesh_node: MeshInstance3D in _spine_meshes:
+        var material: StandardMaterial3D = mesh_node.material_override as StandardMaterial3D
+        if material != null:
+            material.albedo_color = spine_color
+            material.clearcoat = 0.92 * brightness
+    if _cover_mesh != null:
+        var cover_material: StandardMaterial3D = _cover_mesh.material_override as StandardMaterial3D
+        if cover_material != null:
+            if _has_cover:
+                var cover_brightness: float = COVER_PRINT_BRIGHTNESS * brightness
+                cover_material.albedo_color = Color(cover_brightness, cover_brightness, cover_brightness, 1.0)
+            else:
+                var empty_color: Color = EMPTY_COVER_COLOR * brightness
+                empty_color.a = 1.0
+                cover_material.albedo_color = empty_color
 
 func set_selected(value: bool) -> void:
     selected = value
@@ -179,6 +228,6 @@ func _process(delta: float) -> void:
         _drag_pitch_degrees = move_toward(_drag_pitch_degrees, 0.0, return_step)
 
     var target_rot_x: float = deg_to_rad(_drag_pitch_degrees - hover_vector.y * HOVER_PITCH_DEGREES)
-    var target_rot_y: float = deg_to_rad(BASE_YAW_DEGREES + _drag_yaw_degrees + hover_vector.x * HOVER_YAW_DEGREES)
+    var target_rot_y: float = deg_to_rad(_slot_yaw_degrees + _drag_yaw_degrees + hover_vector.x * HOVER_YAW_DEGREES)
     rotation.x = lerp_angle(rotation.x, target_rot_x, rotation_follow)
     rotation.y = lerp_angle(rotation.y, target_rot_y, rotation_follow)

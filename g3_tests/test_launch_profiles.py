@@ -31,7 +31,16 @@ def test_launcher_profile_round_trip(tmp_path):
     eldenring = tmp_path / "eldenring.exe"
     mod_engine.write_bytes(b"")
     eldenring.write_bytes(b"")
-    profile = LaunchProfile(profile_type="launcher", launch_exe=mod_engine, launch_args="--profile default", working_directory=tmp_path, content_path=None, monitor_exe=eldenring, wait_timeout_s=90, run_as_admin=False)
+    profile = LaunchProfile(
+        profile_type="launcher",
+        launch_exe=mod_engine,
+        launch_args="--profile default",
+        working_directory=tmp_path,
+        content_path=None,
+        monitor_exe=eldenring,
+        wait_timeout_s=90,
+        run_as_admin=False,
+    )
     repo.update_launch_profile(game.id, profile)
     loaded = repo.get_launch_profile(game.id)
     assert loaded == profile.normalized()
@@ -44,7 +53,18 @@ def test_emulator_profile_keeps_content_path(tmp_path):
     image = tmp_path / "silent-hill.cue"
     emulator.write_bytes(b"")
     image.write_bytes(b"")
-    repo.update_launch_profile(game.id, LaunchProfile(profile_type="emulator", launch_exe=emulator, launch_args='--fullscreen "{content}"', working_directory=tmp_path, content_path=image, monitor_exe=emulator, wait_timeout_s=60))
+    repo.update_launch_profile(
+        game.id,
+        LaunchProfile(
+            profile_type="emulator",
+            launch_exe=emulator,
+            launch_args='--fullscreen "{content}"',
+            working_directory=tmp_path,
+            content_path=image,
+            monitor_exe=emulator,
+            wait_timeout_s=60,
+        ),
+    )
     loaded = repo.get_launch_profile(game.id)
     assert loaded.profile_type == "emulator"
     assert loaded.content_path == image.resolve()
@@ -64,4 +84,8 @@ def test_launch_profile_rejects_missing_monitor_executable(tmp_path):
     launch = tmp_path / "launcher.exe"
     launch.write_bytes(b"")
     with pytest.raises(FileNotFoundError):
-        LaunchProfile(profile_type="launcher", launch_exe=launch, monitor_exe=tmp_path / "missing-game.exe").normalized()
+        LaunchProfile(
+            profile_type="launcher",
+            launch_exe=launch,
+            monitor_exe=tmp_path / "missing-game.exe",
+        ).normalized()

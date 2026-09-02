@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import sys
 import time
@@ -37,6 +38,7 @@ def test_runtime_launches_without_shell_and_records_stats(tmp_path):
 def test_runtime_rejects_missing_executable(tmp_path):
     repo = _repo(tmp_path)
     missing = tmp_path / "missing.exe"
+    # Bypass repository create validation by creating valid then replacing in object.
     game = repo.create_game(CreateGame(title="Demo", executable_path=Path(sys.executable)))
     game.executable_path = missing
     runtime = GameRuntime(repo)

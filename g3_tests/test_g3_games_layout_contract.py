@@ -1,24 +1,14 @@
 from pathlib import Path
 
-ROOT = Path(__file__).parents[1]
-MAIN = ROOT / "g3_frontend" / "scripts" / "main.gd"
-CAROUSEL = ROOT / "g3_frontend" / "scripts" / "game_carousel.gd"
+ROOT=Path(__file__).parents[1]
+C=(ROOT/'g3_frontend/scripts/game_carousel.gd').read_text(encoding='utf-8')
+M=(ROOT/'g3_frontend/scripts/main.gd').read_text(encoding='utf-8')
 
+def test_browse_uses_four_asymmetric_slots_with_selected_second():
+    assert 'const VISIBLE_SLOT_COUNT: int = 4' in C
+    assert 'const SELECTED_SLOT: int = 1' in C
+    assert 'const SLOT_SCREEN_X: Array[float] = [0.20, 0.455, 0.71, 0.89]' in C
 
-def test_duplicate_section_title_is_removed():
-    text = MAIN.read_text(encoding="utf-8")
-    assert "var title_label" not in text
-    assert "\n    title_label = Label.new()" not in text
-
-
-def test_browse_anchor_is_now_near_screen_center():
-    text = CAROUSEL.read_text(encoding="utf-8")
-    assert "BROWSE_ANCHOR_X" in text
-    assert "BROWSE_ANCHOR_X: float = -0.35" in text
-    assert "PREVIEW_ANCHOR_X: float = -3.10" in text
-
-
-def test_case_caption_uses_projected_selected_case_position():
-    text = MAIN.read_text(encoding="utf-8")
-    assert "selected_case_world_position" in text
-    assert "camera.unproject_position" in text
+def test_browse_caption_is_hidden_and_focus_details_own_text():
+    assert 'case_title_label.visible = false' in M
+    assert 'case_meta_label.visible = false' in M

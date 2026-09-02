@@ -33,6 +33,10 @@ def build_windows_shell_command(executable: Path, arguments: list[str]) -> list[
     ]
 
 
+def _requires_elevation(error: OSError) -> bool:
+    return int(getattr(error, "winerror", 0) or 0) == 740
+
+
 def build_launch_arguments(profile: LaunchProfile) -> list[str]:
     arguments = shlex.split(profile.launch_args, posix=False) if profile.launch_args else []
     normalized: list[str] = []
@@ -144,26 +148,36 @@ class GameRuntime:
             try:
                 process = self._popen([str(executable), *arguments], cwd=str(cwd), shell=False)
             except OSError as direct_error:
-                if os.name != "nt":
-                    logger.exception("Launch failed: exe=%s cwd=%s args=%r", executable, cwd, arguments)
-                    raise
-                logger.warning(
-                    "Direct launch failed; trying Windows shell fallback: exe=%s cwd=%s args=%r error=%s",
-                    executable,
-                    cwd,
-                    arguments,
-                    direct_error,
-                    exc_info=True,
-                )
-                fallback = build_windows_shell_command(executable, arguments)
-                process = self._popen(
-                    fallback,
-                    cwd=str(cwd),
-                    shell=False,
-                    creationflags=int(getattr(subprocess, "CREATE_NO_WINDOW", 0)),
-                )
-            launch_pid = int(process.pid)
-            logger.info("Launch process started: item_id=%s pid=%s", game.id, launch_pid)
+                if _requires_elevation(direct_error):
+                    logger.info(
+                        "Launch executable requested elevation; dispatching UAC: item_id=%s exe=%s",
+                        game.id,
+                        executable,
+                    )
+                    self._elevated_launch(executable, arguments, cwd)
+                    process = None
+                else:
+                    if os.name != "nt":
+                        logger.exception("Launch failed: exe=%s cwd=%s args=%r", executable, cwd, arguments)
+                        raise
+                    logger.warning(
+                        "Direct launch failed; trying Windows shell fallback: exe=%s cwd=%s args=%r error=%s",
+                        executable,
+                        cwd,
+                        arguments,
+                        direct_error,
+                        exc_info=True,
+                    )
+                    fallback = build_windows_shell_command(executable, arguments)
+                    process = self._popen(
+                        fallback,
+                        cwd=str(cwd),
+                        shell=False,
+                        creationflags=int(getattr(subprocess, "CREATE_NO_WINDOW", 0)),
+                    )
+            if process is not None:
+                launch_pid = int(process.pid)
+                logger.info("Launch process started: item_id=%s pid=%s", game.id, launch_pid)
 
         return RunningGame(
             item_id=game.id,

@@ -8,10 +8,14 @@ const MANAGE_MENU_SCRIPT: Script = preload("res://scripts/manage_menu.gd")
 const LAUNCH_PROFILE_DIALOG_SCRIPT: Script = preload("res://scripts/launch_profile_dialog.gd")
 const GAME_METADATA_DIALOG_SCRIPT: Script = preload("res://scripts/game_metadata_dialog.gd")
 const AUDIO_LOADER: Script = preload("res://scripts/audio_file_loader.gd")
+const NAVIGATION_DRAWER_SCRIPT: Script = preload("res://scripts/navigation_drawer.gd")
+const WINDOW_CHROME_SCRIPT: Script = preload("res://scripts/window_chrome.gd")
 
 const XMB_SECTIONS: Array[String] = ["GAMES", "MOVIES", "COMICS", "MUSIC", "SEARCH", "SYSTEM"]
 const XMB_SECTION_LABELS: Array[String] = ["游戏", "电影", "漫画", "音乐", "搜索", "系统"]
 const PREVIEW_SETTLE_SECONDS: float = 0.40
+const RUNTIME_MESSAGE_HOLD_SECONDS: float = 4.0
+const RUNTIME_MESSAGE_FADE_SECONDS: float = 0.35
 
 var backend
 var collection_world: Node3D
@@ -22,6 +26,10 @@ var rim_light: DirectionalLight3D
 var carousel
 var preview
 var xmb_buttons: Array[Button] = []
+var xmb_root: Control
+var navigation_drawer
+var window_chrome
+var default_section_option: OptionButton
 var section_index: int = 0
 var backend_label: Label
 var fps_label: Label
@@ -53,7 +61,6 @@ var _pending_metadata_get_id: String = ""
 var _pending_metadata_update_id: String = ""
 var _preview_generation: int = 0
 var _restore_item_id: String = ""
-var _restore_section: String = "GAMES"
 var _fps_accum: float = 0.0
 var _theme_music_base_volume: float = 0.35
 var _theme_music_enabled: bool = true
@@ -64,8 +71,17 @@ var _theme_accent: Color = Color(0.20, 0.82, 0.76, 1.0)
 var _theme_secondary: Color = Color(0.25, 0.55, 0.90, 1.0)
 var _audio_tween: Tween
 var _caption_tween: Tween
+var _runtime_message_tween: Tween
+var _runtime_message_generation: int = 0
+var _window_mode_before_gameplay: int = Window.MODE_WINDOWED
+var _window_borderless_before_gameplay: bool = true
+var _window_size_before_gameplay: Vector2i = Vector2i(1600, 900)
+var _window_position_before_gameplay: Vector2i = Vector2i.ZERO
 
 func _ready() -> void:
+    var app_window := get_window()
+    if app_window != null:
+        app_window.borderless = true
     _build_3d_world()
     _build_ambient()
     _build_ui()
@@ -166,6 +182,10 @@ func _build_ui() -> void:
     ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
     layer.add_child(ui)
 
+    xmb_root = Control.new()
+    xmb_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    xmb_root.visible = false
+    ui.add_child(xmb_root)
     var x: float = 62.0
     for i: int in range(XMB_SECTIONS.size()):
         var button: Button = Button.new()
@@ -174,9 +194,8 @@ func _build_ui() -> void:
         button.text = XMB_SECTION_LABELS[i]
         button.flat = true
         button.focus_mode = Control.FOCUS_NONE
-        button.add_theme_font_size_override("font_size", 17)
         button.pressed.connect(_on_xmb_pressed.bind(i))
-        ui.add_child(button)
+        xmb_root.add_child(button)
         xmb_buttons.append(button)
         x += 148.0
 
@@ -187,6 +206,7 @@ func _build_ui() -> void:
     case_title_label.add_theme_font_size_override("font_size", 28)
     case_title_label.add_theme_color_override("font_color", _theme_text)
     case_title_label.modulate.a = 0.0
+    case_title_label.visible = false
     ui.add_child(case_title_label)
 
     case_meta_label = Label.new()
@@ -196,6 +216,7 @@ func _build_ui() -> void:
     case_meta_label.add_theme_font_size_override("font_size", 12)
     case_meta_label.add_theme_color_override("font_color", _theme_muted)
     case_meta_label.modulate.a = 0.0
+    case_meta_label.visible = false
     ui.add_child(case_meta_label)
 
     backend_label = Label.new()
@@ -226,15 +247,6 @@ func _build_ui() -> void:
     runtime_error_label.visible = false
     runtime_error_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     ui.add_child(runtime_error_label)
-
-    hint_label = Label.new()
-    hint_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-    hint_label.position = Vector2(78.0, -72.0)
-    hint_label.size = Vector2(820.0, 30.0)
-    hint_label.text = "滚轮 / ← → 选择    单击预览    聚焦后拖动盒子旋转    双击启动    右键管理    Ctrl+Q 退出"
-    hint_label.add_theme_font_size_override("font_size", 12)
-    hint_label.add_theme_color_override("font_color", _theme_muted)
-    ui.add_child(hint_label)
 
     preview = PREVIEW_SCRIPT.new()
     preview.position = Vector2(708.0, 150.0)
@@ -279,11 +291,46 @@ func _build_ui() -> void:
     exit_button.pressed.connect(_exit_application)
     system_panel.add_child(exit_button)
 
+    var start_label := Label.new()
+    start_label.text = "默认启动板块"
+    start_label.add_theme_font_size_override("font_size", 16)
+    system_panel.add_child(start_label)
+    default_section_option = OptionButton.new()
+    default_section_option.custom_minimum_size = Vector2(320.0, 42.0)
+    for label: String in XMB_SECTION_LABELS:
+        default_section_option.add_item(label)
+    default_section_option.item_selected.connect(_on_default_start_section_selected)
+    system_panel.add_child(default_section_option)
+
+    var help_title := Label.new()
+    help_title.text = "操作说明"
+    help_title.add_theme_font_size_override("font_size", 16)
+    system_panel.add_child(help_title)
+    hint_label = Label.new()
+    hint_label.text = "滚轮 / ← → 选择    单击预览    聚焦后拖动盒子旋转    双击启动    右键管理    Ctrl+Q 退出"
+    hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    hint_label.add_theme_color_override("font_color", _theme_muted)
+    system_panel.add_child(hint_label)
+
     var system_note: Label = Label.new()
-    system_note.text = "G3 当前状态\n已可用：启动器 / Python Core / 本地库 / 中文 XMB / 右键管理 / 启动设置 / 编辑资料 / 实体 3D 游戏盒\n本轮更新：浏览态回到大封面居中轮播、聚焦主盒显著放大、亚克力半透明盒体、预览文字/媒体入场动画、右键菜单改为清晰中文面板、预览详情点击不再误返回、System 增加退出 G3 / Ctrl+Q\n性能策略：默认 60 FPS 上限、轻量 MSAA、弱化背景与 SSAO 开销、游戏运行时最小化并暂停渲染\n当前仍保留入口：电影 / 漫画 / 音乐 / 搜索\n数据目录：%LOCALAPPDATA%\\G3  ·  Backend 127.0.0.1"
+    system_note.text = (
+        "功能地图 / 更新状态\n"
+        + "Games：四槽非对称实体盒轨道、聚焦详情、编辑资料、启动设置、Preview 媒体\n"
+        + "本轮：G1 四槽连续队列；边缘滚动平滑；右下导航修复；主题自绘窗口栏；提示自动淡出\n"
+        + "仅保留入口：电影 / 漫画 / 音乐 / 搜索\n"
+        + "数据目录：%LOCALAPPDATA%\\G3  ·  Backend 127.0.0.1"
+    )
     system_note.add_theme_font_size_override("font_size", 13)
     system_note.add_theme_color_override("font_color", _theme_muted)
     system_panel.add_child(system_note)
+
+    window_chrome = WINDOW_CHROME_SCRIPT.new()
+    ui.add_child(window_chrome)
+    window_chrome.set_theme_colors(_theme_text, _theme_muted, _theme_accent, Color(0.025, 0.085, 0.105, 1.0))
+
+    navigation_drawer = NAVIGATION_DRAWER_SCRIPT.new()
+    navigation_drawer.section_requested.connect(_on_navigation_section_requested)
+    ui.add_child(navigation_drawer)
 
     add_game_dialog = FileDialog.new()
     add_game_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -318,7 +365,6 @@ func _process(delta: float) -> void:
     if _fps_accum >= 0.25:
         _fps_accum = 0.0
         fps_label.text = "%d FPS" % Engine.get_frames_per_second()
-    _update_case_caption_position()
 
 func _unhandled_input(event: InputEvent) -> void:
     if not _preview_open or section_index != 0:
@@ -350,32 +396,25 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _on_xmb_pressed(index: int) -> void:
     _set_section(index)
 
-func _set_section(index: int, persist: bool = true) -> void:
+func _set_section(index: int, _persist: bool = true) -> void:
     section_index = clampi(index, 0, XMB_SECTIONS.size() - 1)
-    for i: int in range(xmb_buttons.size()):
-        var active: bool = i == section_index
-        var button: Button = xmb_buttons[i]
-        button.add_theme_color_override(
-            "font_color",
-            _theme_text if active else _theme_muted
-        )
-        button.add_theme_font_size_override("font_size", 22 if active else 16)
-
     var section: String = XMB_SECTIONS[section_index]
     carousel.visible = section == "GAMES"
     system_panel.visible = section == "SYSTEM"
     placeholder_label.visible = section != "GAMES" and section != "SYSTEM"
+    backend_label.visible = section == "SYSTEM"
+    fps_label.visible = section == "SYSTEM"
+    hint_label.visible = section == "SYSTEM"
+    runtime_error_label.visible = section == "SYSTEM" and not runtime_error_label.text.is_empty()
+    if navigation_drawer != null:
+        navigation_drawer.set_active_section(section)
     if placeholder_label.visible:
         placeholder_label.text = _section_label(section) + "  /  当前仅保留模块入口"
     if section != "GAMES":
         _close_preview()
-        _set_case_caption_visible(false, true)
-    else:
-        _refresh_case_caption()
-        _set_case_caption_visible(not _preview_open, true)
+    case_title_label.visible = false
+    case_meta_label.visible = false
 
-    if persist and backend != null and backend.is_connected_to_backend():
-        backend.request("state.update", {"last_section": section.to_lower()})
 
 func _on_backend_connected() -> void:
     backend_label.text = "后端已连接"
@@ -395,10 +434,6 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
         if ok and data is Dictionary:
             var state: Dictionary = data as Dictionary
             _restore_item_id = str(state.get("last_item_id", ""))
-            _restore_section = str(state.get("last_section", "games")).to_upper()
-            var index: int = XMB_SECTIONS.find(_restore_section)
-            if index >= 0:
-                _set_section(index, false)
         return
 
     if request_id == _pending_games_id:
@@ -429,6 +464,12 @@ func _on_backend_response(request_id: String, ok: bool, data: Variant, error: Va
             preview.set_audio_preferences(preview_enabled, preview_volume)
             _theme_music_enabled = bool(settings.get("theme_music", true))
             _theme_music_base_volume = clampf(float(settings.get("theme_music_volume", 0.35)), 0.0, 1.0)
+            var default_section: String = str(settings.get("default_start_section", "games")).to_upper()
+            var start_index: int = XMB_SECTIONS.find(default_section)
+            if start_index < 0:
+                start_index = 0
+            default_section_option.select(start_index)
+            _set_section(start_index, false)
             if not _current_theme.is_empty():
                 _apply_theme_audio(_current_theme)
         return
@@ -608,13 +649,11 @@ func _close_preview() -> void:
     _preview_open = false
     carousel.set_preview_mode(false)
     preview.hide_preview()
-    if section_index == 0 and not _selected_game.is_empty():
-        _set_case_caption_visible(true)
 
 func _restore_selection_by_id(item_id: String) -> void:
     for i: int in range(carousel.games.size()):
         if str(carousel.games[i].get("id", "")) == item_id:
-            carousel.select_index(i)
+            carousel.jump_to_index(i)
             return
 
 func _apply_theme(theme: Dictionary) -> void:
@@ -643,6 +682,8 @@ func _apply_theme(theme: Dictionary) -> void:
     case_title_label.add_theme_color_override("font_color", _theme_text)
     case_meta_label.add_theme_color_override("font_color", _theme_muted)
     hint_label.add_theme_color_override("font_color", _theme_muted)
+    if window_chrome != null:
+        window_chrome.set_theme_colors(_theme_text, _theme_muted, _theme_accent, top_color)
 
     var ambient_value: Variant = theme.get("ambient", {})
     if ambient_value is Dictionary:
@@ -719,13 +760,36 @@ func _error_message(error: Variant) -> String:
     return str(error)
 
 func _show_runtime_error(prefix: String, message: String) -> void:
+    _runtime_message_generation += 1
+    var generation: int = _runtime_message_generation
+    if _runtime_message_tween != null and _runtime_message_tween.is_valid():
+        _runtime_message_tween.kill()
+    runtime_error_label.modulate.a = 1.0
     runtime_error_label.text = "%s · %s" % [prefix, message]
     runtime_error_label.visible = true
     push_error(runtime_error_label.text)
+    _dismiss_runtime_message_after_delay(generation)
 
-func _clear_runtime_error() -> void:
+func _dismiss_runtime_message_after_delay(generation: int) -> void:
+    await get_tree().create_timer(RUNTIME_MESSAGE_HOLD_SECONDS).timeout
+    if generation != _runtime_message_generation or runtime_error_label.text.is_empty():
+        return
+    _runtime_message_tween = create_tween()
+    _runtime_message_tween.tween_property(runtime_error_label, "modulate:a", 0.0, RUNTIME_MESSAGE_FADE_SECONDS)
+    await _runtime_message_tween.finished
+    if generation != _runtime_message_generation:
+        return
     runtime_error_label.visible = false
     runtime_error_label.text = ""
+    runtime_error_label.modulate.a = 1.0
+
+func _clear_runtime_error() -> void:
+    _runtime_message_generation += 1
+    if _runtime_message_tween != null and _runtime_message_tween.is_valid():
+        _runtime_message_tween.kill()
+    runtime_error_label.visible = false
+    runtime_error_label.text = ""
+    runtime_error_label.modulate.a = 1.0
 
 func _apply_theme_audio(theme: Dictionary) -> void:
     if theme_music_player == null:
@@ -769,13 +833,26 @@ func _on_game_executable_selected(path: String) -> void:
         }
     )
 
+func _on_navigation_section_requested(section_id: String) -> void:
+    var index: int = XMB_SECTIONS.find(section_id)
+    if index >= 0:
+        _set_section(index)
+
+func _on_default_start_section_selected(index: int) -> void:
+    if backend == null or not backend.is_connected_to_backend():
+        return
+    var section_id: String = XMB_SECTIONS[clampi(index, 0, XMB_SECTIONS.size() - 1)].to_lower()
+    backend.request("settings.update", {"default_start_section": section_id})
+
 func _toggle_window_mode() -> void:
-    if get_window().mode == Window.MODE_MAXIMIZED:
-        get_window().mode = Window.MODE_WINDOWED
-        get_window().borderless = false
+    var window: Window = get_window()
+    if window == null:
+        return
+    window.borderless = true
+    if window.mode == Window.MODE_MAXIMIZED or window.mode == Window.MODE_FULLSCREEN or window.mode == Window.MODE_EXCLUSIVE_FULLSCREEN:
+        window.mode = Window.MODE_WINDOWED
     else:
-        get_window().borderless = true
-        get_window().mode = Window.MODE_MAXIMIZED
+        window.mode = Window.MODE_MAXIMIZED
 
 func _section_label(section: String) -> String:
     var index: int = XMB_SECTIONS.find(section)
@@ -788,6 +865,10 @@ func _enter_gameplay_mode() -> void:
     if window == null:
         return
     if window.mode != Window.MODE_MINIMIZED:
+        _window_mode_before_gameplay = window.mode
+        _window_borderless_before_gameplay = window.borderless
+        _window_size_before_gameplay = window.size
+        _window_position_before_gameplay = window.position
         window.mode = Window.MODE_MINIMIZED
     RenderingServer.render_loop_enabled = false
 
@@ -796,9 +877,11 @@ func _restore_from_gameplay() -> void:
     var window: Window = get_window()
     if window == null:
         return
-    window.borderless = true
-    if window.mode != Window.MODE_MAXIMIZED:
-        window.mode = Window.MODE_MAXIMIZED
+    window.borderless = _window_borderless_before_gameplay
+    window.mode = _window_mode_before_gameplay
+    if _window_mode_before_gameplay == Window.MODE_WINDOWED:
+        window.size = _window_size_before_gameplay
+        window.position = _window_position_before_gameplay
     window.grab_focus()
 
 func _exit_application() -> void:

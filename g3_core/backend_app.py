@@ -65,6 +65,34 @@ class BackendApplication:
         if command_type == "game.preview":
             item_id = self._require_id(payload)
             return self._preview_to_dict(self.media.resolve_preview(item_id))
+        if command_type == "game.metadata.get":
+            item_id = self._require_id(payload)
+            game = self.repository.get_game(item_id)
+            if game is None:
+                raise KeyError(item_id)
+            return self._game_metadata_to_dict(game)
+        if command_type == "game.metadata.update":
+            item_id = self._require_id(payload)
+            release_year_value = payload.get("release_year")
+            release_year = None
+            if release_year_value not in (None, "", 0, "0"):
+                try:
+                    release_year = int(release_year_value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("release_year must be a four-digit year") from exc
+            updated = self.repository.update_game_metadata(
+                item_id,
+                title=str(payload.get("title", "")),
+                platform=str(payload.get("platform", "")),
+                description=str(payload.get("description", "")),
+                developer=str(payload.get("developer", "")),
+                publisher=str(payload.get("publisher", "")),
+                release_year=release_year,
+                tags=str(payload.get("tags", "")),
+                notes=str(payload.get("notes", "")),
+            )
+            await self._event_sink("library.changed", {"media_type": "game", "item_id": item_id})
+            return self._game_metadata_to_dict(updated)
         if command_type == "game.launch_profile.get":
             item_id = self._require_id(payload)
             return self._profile_to_dict(self.repository.get_launch_profile(item_id))
@@ -189,7 +217,7 @@ class BackendApplication:
         )
 
     def _game_to_dict(self, game: GameRecord) -> dict[str, object]:
-        cover_asset = self.repository.best_media_asset(game.id, "cover")
+        cover_path = self.media.resolve_cover(game.id)
         profile = game.launch_profile
         return {
             "id": game.id,
@@ -201,10 +229,29 @@ class BackendApplication:
             "working_directory": game.working_directory,
             "launch_profile": self._profile_to_dict(profile),
             "platform": game.platform,
+            "developer": game.developer,
+            "publisher": game.publisher,
+            "release_year": game.release_year,
+            "tags": game.tags,
+            "notes": game.notes,
             "playtime_seconds": game.playtime_seconds,
             "last_played_at": game.last_played_at.isoformat() if game.last_played_at else None,
             "installed_state": game.installed_state,
-            "cover": str(cover_asset.path) if cover_asset else "",
+            "cover": str(cover_path) if cover_path else "",
+        }
+
+    @staticmethod
+    def _game_metadata_to_dict(game: GameRecord) -> dict[str, object]:
+        return {
+            "id": game.id,
+            "title": game.title,
+            "platform": game.platform,
+            "description": game.description,
+            "developer": game.developer,
+            "publisher": game.publisher,
+            "release_year": game.release_year,
+            "tags": game.tags,
+            "notes": game.notes,
         }
 
     @staticmethod

@@ -26,6 +26,15 @@ CREATE TABLE IF NOT EXISTS games (
     installed_state TEXT NOT NULL DEFAULT 'installed'
 );
 
+CREATE TABLE IF NOT EXISTS game_metadata (
+    item_id TEXT PRIMARY KEY REFERENCES library_items(id) ON DELETE CASCADE,
+    developer TEXT NOT NULL DEFAULT '',
+    publisher TEXT NOT NULL DEFAULT '',
+    release_year INTEGER,
+    tags TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS media_assets (
     id TEXT PRIMARY KEY,
     owner_id TEXT NOT NULL REFERENCES library_items(id) ON DELETE CASCADE,

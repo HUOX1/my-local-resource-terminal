@@ -1,6 +1,8 @@
 extends Window
 class_name G3LaunchProfileDialog
 
+const TEXT_MENU_LOCALIZER: Script = preload("res://scripts/text_context_menu_localizer.gd")
+
 signal save_requested(item_id: String, profile: Dictionary)
 
 var _item_id: String = ""
@@ -17,6 +19,7 @@ var _content_dialog: FileDialog
 var _monitor_dialog: FileDialog
 
 func _ready() -> void:
+    hide()
     title = "G3 · 启动设置"
     size = Vector2i(760, 620)
     min_size = Vector2i(680, 560)
@@ -105,6 +108,9 @@ func _ready() -> void:
     _monitor_dialog = _make_file_dialog(PackedStringArray(["*.exe ; Windows Executable"]))
     _monitor_dialog.file_selected.connect(_on_monitor_selected)
     add_child(_monitor_dialog)
+
+    TEXT_MENU_LOCALIZER.localize_tree(self)
+    call_deferred("_localize_context_menus")
 
 func show_profile(item_id: String, profile: Dictionary) -> void:
     _item_id = item_id
@@ -200,3 +206,6 @@ func _save() -> void:
         }
     )
     hide()
+
+func _localize_context_menus() -> void:
+    TEXT_MENU_LOCALIZER.localize_tree(self)

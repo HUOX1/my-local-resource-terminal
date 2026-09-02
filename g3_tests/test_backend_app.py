@@ -77,3 +77,22 @@ async def test_game_launch_emits_started_and_exited(tmp_path):
 
     assert [event["type"] for event in events][:3] == ["game.started", "game.session_started", "game.exited"]
     assert events[1]["payload"]["item_id"] == game["id"]
+
+@pytest.mark.asyncio
+async def test_library_games_list_exposes_auto_discovered_cover(tmp_path):
+    app = BackendApplication(_paths(tmp_path), builtin_theme_root=tmp_path / "builtin")
+    app.initialize()
+    game_dir = tmp_path / "RainWorld"
+    game_dir.mkdir()
+    exe = game_dir / "RainWorld.exe"
+    exe.write_bytes(b"")
+    cover = game_dir / "cover.jpg"
+    cover.write_bytes(b"cover")
+
+    await app.handle_command(
+        "game.create",
+        {"title": "Rain World", "executable_path": str(exe)},
+    )
+    games = await app.handle_command("library.games.list", {})
+
+    assert games[0]["cover"] == str(cover.resolve())

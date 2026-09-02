@@ -33,7 +33,9 @@ TOP XMB
 
 At 1600×900 reference resolution, the selected-case visual center should be approximately **x=22–26% / y=42–48%** of the viewport. It must never sit at the geometric center of the whole screen. Neighboring cases extend horizontally from this anchor.
 
-When Preview opens, the case unit shifts only slightly left if needed. The title under the case fades out while the Preview's right-side title is visible, then fades back when Preview closes.
+When Preview opens, the selected case leaves the far-left browse anchor and glides right into a dedicated focus anchor at roughly 28–30% of viewport width. The Preview begins on the right side, so case and Preview read as one composition. The title under the case fades out while the Preview's title is visible, then fades back when Preview closes.
+
+The selected case uses a product-display pose rather than a flat front view: idle yaw is about 20°. In Preview focus mode, pressing and dragging the selected case rotates it up to ±40° horizontally and ±12° vertically; a small movement threshold preserves normal click/double-click behavior. On release, the case eases back to the standard display pose.
 
 Clicking an empty Games-background region closes Preview. Clicking XMB, Preview content, or a case does not count as an empty-background click.
 
@@ -45,7 +47,7 @@ The case model is a shared mesh resource; individual games change textures/mater
 
 ### Asset contract
 
-Target file: `g3_frontend/assets/models/game_case.glb`
+First formal case template: `g3_frontend/assets/models/cases/standard_tall.glb`
 
 Recommended modeling constraints:
 
@@ -54,14 +56,17 @@ Recommended modeling constraints:
 - Pivot/origin at the geometric center of the case.
 - Local axes: +Y up, +X right, front face oriented toward +Z.
 - Apply transforms before export: scale 1/1/1 and rotation 0/0/0.
-- Approximate physical proportions: height 190 mm, width 135 mm, depth 15–18 mm. Exact unit scale is less important than consistent proportions.
+- Standard Tall is modeled at real-world proportions: height about 190 mm, width 135 mm, depth 15–18 mm. G3 currently applies a 10x presentation scale at runtime to fit the established carousel coordinate system.
 - 500–2,000 triangles is preferred; hard-surface bevels should be modest.
 - One UV set. Front-cover UV region must not overlap the spine/back if a single atlas is used.
 - Preferred material slots:
-  - `case_plastic`
-  - `cover_front`
-  - optional `case_spine`
+  - `盒体`
+  - `封面正面`
+  - optional `封面书脊` / `封面背面`
+  - legacy English names remain accepted for compatibility
 - No baked lighting or baked shadows.
+- G3 supplies neutral plastic materials at runtime instead of theme-tinting the whole case. Theme color is reserved for a restrained rim light.
+- Runtime presentation uses a low-energy three-point product-light rig (warm key, cool fill, theme-aware rim) plus weak neutral ambient fill so bevels, seams, and opening recesses remain readable without washing out cover art.
 - Export as binary `.glb` from Blender using glTF 2.0.
 
 G3 must keep only a small carousel working set alive (target 7–11 instances around the selection). Hundreds of library entries must not imply hundreds of rendered GLB instances.
@@ -129,3 +134,15 @@ The feature/status map and SYSTEM-facing development status are Chinese. Interna
 ## 7. Current Scope
 
 This pass focuses on making GAMES a complete vertical slice before expanding Movies/Comics/Music/Search. Other modules may remain slots while Games gains real 3D cases, visible Preview/Manage entry points, launch profiles, launch/return monitoring, and Chinese status documentation.
+
+
+## v0.6.1.9 G1 Layout Correction
+
+The earlier fixed left-anchor percentages in this document are superseded by the Windows acceptance reference taken from the actual G1 animation. Browse now uses four viewport-relative slots at approximately **17% / 44% / 70% / 92%** of the current G3 window. The selected cover is the second slot. Secondary covers are distinguished by depth, scale, brightness, and a restrained toe-in toward the camera; the right-edge cover must remain cover-readable rather than presenting a bright bare spine.
+
+G3 defaults to a normal resizable Windows window, matching G1 desktop behavior. Maximizing the window is supported and keeps the same relative four-slot composition. Preview keeps the large selected-case focus behavior, with its horizontal anchor expressed relative to the viewport rather than a fixed world X.
+
+
+### v0.6.1.9.1 G1 visual measurement correction
+
+Windows acceptance showed that matching G1 requires matching case *visual extents*, not merely spreading four center points across the window. The current reference centers are approximately **20% / 45.5% / 71% / 89%**, while the left/right near cases are roughly two-thirds of the selected case's apparent width. Preview keeps a large left-side selected case, but non-selected cases remain recognizably case-sized background objects rather than thumbnail dots.

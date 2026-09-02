@@ -4,7 +4,7 @@
 
 **Goal:** Turn the current v0.6 technical checkpoint into the first usable G3 Games vertical slice with G3 naming, real 3D-case asset loading, discoverable game actions, and launch profiles that cover direct executables, launcher/mod chains, and emulators.
 
-**Architecture:** Python remains the local Core/supervisor and Godot remains the GPU frontend. G3 introduces a launch-profile model in Python and a reusable GLB case scene in Godot; the frontend keeps only a small carousel window instantiated. The current clean v0.6 data is intentionally reset into `%LOCALAPPDATA%\G3` rather than migrated.
+**Architecture:** Python remains the local Core/supervisor and Godot remains the GPU frontend. G3 introduces a launch-profile model in Python and a reusable GLB case scene in Godot; the frontend keeps only a small carousel window instantiated. The current clean v0.6 data is intentionally reset into `%LOCALAPPDATA%\\G3` rather than migrated.
 
 **Tech Stack:** Python 3.11+, SQLite, websockets, Godot 4.7.2, GDScript, glTF/GLB.
 
@@ -26,7 +26,7 @@
 
 **Files:** Rename `g3_core/` → `g3_core/`, `g3_launcher/` → `g3_launcher/`, `g3_frontend/` → `g3_frontend/`; modify `run_windows.vbs`, `run_windows_debug.bat`, `setup_windows.bat`, `pyproject.toml`, tests, and all Python/Godot paths.
 
-**Interfaces:** `python -m g3_launcher`; data root `%LOCALAPPDATA%\G3`.
+**Interfaces:** `python -m g3_launcher`; data root `%LOCALAPPDATA%\\G3`.
 
 - [ ] Write failing tests asserting no runtime directories/modules named `terminal_*` or `g3_frontend` remain, launcher imports `g3_launcher`, and `TerminalPaths.from_environment().root == LOCALAPPDATA / "G3"`.
 - [ ] Run the rename tests and verify RED.
@@ -57,7 +57,7 @@
 - [ ] Direct profiles default `monitor_exe` to `launch_exe`.
 - [ ] Launcher/emulator profiles wait up to `wait_timeout_s` for monitor process.
 - [ ] Emit detailed `game.started`, `game.session_started`, `game.exited`, and timeout/error events.
-- [ ] Keep launch diagnostics in console + `%LOCALAPPDATA%\G3\logs\g3.log`.
+- [ ] Keep launch diagnostics in console + `%LOCALAPPDATA%\\G3\\logs\\g3.log`.
 
 ### Task 4: Real 3D GLB case pipeline
 

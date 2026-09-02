@@ -93,6 +93,11 @@ class GameRecord:
     description: str
     launch_profile: LaunchProfile
     platform: str
+    developer: str
+    publisher: str
+    release_year: int | None
+    tags: str
+    notes: str
     playtime_seconds: int
     last_played_at: datetime | None
     installed_state: str
